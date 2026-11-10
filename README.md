@@ -103,3 +103,7 @@ build.sh                   # 编译与安装脚本
 ```
 
 `Fanyi.xcodeproj` 和 `Info.plist` 都由 XcodeGen 根据 `project.yml` 生成，不纳入版本管理。想在 Xcode 里开发的话，先运行 `xcodegen generate`，再打开 `Fanyi.xcodeproj`。
+
+## 许可证
+
+[MIT](LICENSE)
