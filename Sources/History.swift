@@ -7,6 +7,9 @@ struct HistoryEntry: Codable, Identifiable, Hashable {
     var count = 1
     var firstAt = Date()
     var lastAt = Date()
+    /// 最近一次查询时的原句和来源
+    var context: String?
+    var origin: String?
 }
 
 /// 查词历史：保存在 ~/Library/Application Support/Fanyi/history.json，最近查询的排在前面。
@@ -37,7 +40,7 @@ final class HistoryStore {
     }
 
     /// 记录一次查询，返回这是第几次查（未开启历史时返回 0）。
-    func record(_ text: String) -> Int {
+    func record(_ text: String, context: String? = nil, origin: String? = nil) -> Int {
         guard Settings.historyEnabled else { return 0 }
         let k = key(text)
         var entry: HistoryEntry
@@ -48,6 +51,8 @@ final class HistoryStore {
         } else {
             entry = HistoryEntry(text: text.trimmingCharacters(in: .whitespacesAndNewlines))
         }
+        if let context { entry.context = context }
+        if let origin { entry.origin = origin }
         entries.insert(entry, at: 0)
         if entries.count > limit { entries.removeLast(entries.count - limit) }
         persist()
@@ -189,7 +194,7 @@ struct HistoryView: View {
             if favorited {
                 vocabulary.remove(text: entry.text)
             } else {
-                vocabulary.save(text: entry.text, translation: entry.translation)
+                vocabulary.save(text: entry.text, translation: entry.translation, context: entry.context, origin: entry.origin)
             }
         }
     }
@@ -203,10 +208,24 @@ struct HistoryView: View {
                         Text(entry.text)
                             .font(.system(size: 20, weight: .semibold))
                             .textSelection(.enabled)
+                        if let context = entry.context {
+                            Text(highlighted(context, term: entry.text))
+                                .font(.system(size: 13))
+                                .lineSpacing(3)
+                                .textSelection(.enabled)
+                                .padding(10)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+                        }
                         Text(entry.translation.isEmpty ? "（没有保存译文）" : entry.translation)
                             .font(.system(size: 14))
                             .lineSpacing(4)
                             .textSelection(.enabled)
+                        if let origin = entry.origin {
+                            Text("来源：\(origin)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         Text("共查询 \(entry.count) 次 · 首次 \(entry.firstAt.formatted(date: .abbreviated, time: .shortened)) · 最近 \(entry.lastAt.formatted(date: .abbreviated, time: .shortened))")
                             .font(.caption)
                             .foregroundStyle(.tertiary)

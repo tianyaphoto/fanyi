@@ -5,6 +5,9 @@ import AVFoundation
 @Observable
 final class TranslationModel {
     var source = ""
+    /// 选中词所在的原句、来源 App / 文档
+    var context: String?
+    var origin: String?
     var result = ""
     var localDefinition: String?
     var isLoading = false
@@ -23,27 +26,29 @@ final class TranslationModel {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private let speaker = AVSpeechSynthesizer()
 
-    func translate(_ raw: String) {
-        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    func translate(_ capture: Capture) {
+        let text = capture.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         cancel()
         source = text
+        context = capture.context
+        origin = capture.origin
         result = ""
         errorMessage = nil
         needsAPIKey = false
         isFavorited = VocabularyStore.shared.contains(text)
         localDefinition = LocalDictionary.lookup(text)
-        lookupCount = HistoryStore.shared.record(text)
+        lookupCount = HistoryStore.shared.record(text, context: context, origin: origin)
 
         isLoading = true
         task = Task {
             do {
-                for try await chunk in Translator.stream(text: text) {
+                for try await chunk in Translator.stream(text: text, context: context) {
                     result += chunk
                 }
                 if Task.isCancelled { return }
                 HistoryStore.shared.updateTranslation(text, translation: result)
-                if isFavorited { VocabularyStore.shared.save(text: text, translation: result) }
+                if isFavorited { saveToVocabulary() }
             } catch {
                 if Task.isCancelled { return }
                 errorMessage = error.localizedDescription
@@ -64,7 +69,7 @@ final class TranslationModel {
     }
 
     func submitInput() {
-        translate(inputText)
+        translate(Capture(text: inputText))
     }
 
     func showMessage(_ message: String) {
@@ -76,6 +81,8 @@ final class TranslationModel {
 
     private func reset() {
         source = ""
+        context = nil
+        origin = nil
         result = ""
         localDefinition = nil
         errorMessage = nil
@@ -96,9 +103,15 @@ final class TranslationModel {
         if isFavorited {
             VocabularyStore.shared.remove(text: source)
         } else {
-            VocabularyStore.shared.save(text: source, translation: result.isEmpty ? (localDefinition ?? "") : result)
+            saveToVocabulary()
         }
         isFavorited.toggle()
+    }
+
+    private func saveToVocabulary() {
+        VocabularyStore.shared.save(text: source,
+                                    translation: result.isEmpty ? (localDefinition ?? "") : result,
+                                    context: context, origin: origin)
     }
 
     func speak() {
@@ -181,12 +194,21 @@ struct TranslationView: View {
                     .onExitCommand { onClose() }
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text(model.source.isEmpty ? "翻译神器" : model.source)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(model.source.isEmpty ? "翻译神器" : model.source)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                        .textSelection(.enabled)
+                    if let context = model.context {
+                        Text(highlighted(context, term: model.source))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(2)
+                            .help(context)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             HStack(spacing: 2) {

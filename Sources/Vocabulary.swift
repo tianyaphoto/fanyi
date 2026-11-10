@@ -6,6 +6,10 @@ struct VocabEntry: Codable, Identifiable, Hashable {
     var translation: String
     var createdAt = Date()
     var mastered = false
+    /// 收藏时所在的原句
+    var context: String?
+    /// 来源 App / 文档，例如「预览 · paper.pdf」
+    var origin: String?
 }
 
 /// 生词本：保存在 ~/Library/Application Support/Fanyi/vocabulary.json
@@ -39,14 +43,24 @@ final class VocabularyStore {
         return entries.contains { key($0.text) == k }
     }
 
-    /// 新增；如果已存在则更新译文。
-    func save(text: String, translation: String) {
+    /// 新增；如果已存在则更新译文（以及新的原句、来源）。
+    func save(text: String, translation: String, context: String? = nil, origin: String? = nil) {
         let k = key(text)
         if let index = entries.firstIndex(where: { key($0.text) == k }) {
             if !translation.isEmpty { entries[index].translation = translation }
+            if let context { entries[index].context = context }
+            if let origin { entries[index].origin = origin }
         } else {
-            entries.insert(VocabEntry(text: text.trimmingCharacters(in: .whitespacesAndNewlines), translation: translation), at: 0)
+            entries.insert(VocabEntry(text: text.trimmingCharacters(in: .whitespacesAndNewlines),
+                                      translation: translation, context: context, origin: origin), at: 0)
         }
+        persist()
+    }
+
+    func updateContext(id: VocabEntry.ID, context: String) {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = context.trimmingCharacters(in: .whitespacesAndNewlines)
+        entries[index].context = trimmed.isEmpty ? nil : trimmed
         persist()
     }
 
@@ -82,6 +96,8 @@ struct VocabularyView: View {
     @State private var query = ""
     @State private var filter = Filter.all
     @State private var selection: VocabEntry.ID?
+    @State private var editingContext = false
+    @State private var contextDraft = ""
 
     private var filtered: [VocabEntry] {
         store.entries.filter { entry in
@@ -93,6 +109,7 @@ struct VocabularyView: View {
             guard !query.isEmpty else { return true }
             return entry.text.localizedCaseInsensitiveContains(query)
                 || entry.translation.localizedCaseInsensitiveContains(query)
+                || (entry.context?.localizedCaseInsensitiveContains(query) ?? false)
         }
     }
 
@@ -136,6 +153,52 @@ struct VocabularyView: View {
                 .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 640, minHeight: 400)
+        .onChange(of: selection) { editingContext = false }
+    }
+
+    private func contextSection(_ entry: VocabEntry) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label("原句", systemImage: "text.quote")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if editingContext {
+                    Button("取消") { editingContext = false }
+                        .buttonStyle(.link)
+                    Button("保存") {
+                        store.updateContext(id: entry.id, context: contextDraft)
+                        editingContext = false
+                    }
+                    .buttonStyle(.link)
+                } else {
+                    Button(entry.context == nil ? "添加原句" : "编辑") {
+                        contextDraft = entry.context ?? ""
+                        editingContext = true
+                    }
+                    .buttonStyle(.link)
+                }
+            }
+            .font(.system(size: 11))
+
+            if editingContext {
+                TextField("粘贴这个词所在的句子", text: $contextDraft, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...6)
+            } else if let context = entry.context {
+                Text(highlighted(context, term: entry.text))
+                    .font(.system(size: 14))
+                    .lineSpacing(3)
+                    .textSelection(.enabled)
+            } else {
+                Text("收藏时没有读取到原句，可以手动添加")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
     }
 
     private func row(_ entry: VocabEntry) -> some View {
@@ -148,6 +211,12 @@ struct VocabularyView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                if let context = entry.context {
+                    Text(highlighted(context, term: entry.text))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 0)
             if entry.mastered {
@@ -177,11 +246,12 @@ struct VocabularyView: View {
                         Text(entry.text)
                             .font(.system(size: 20, weight: .semibold))
                             .textSelection(.enabled)
+                        contextSection(entry)
                         Text(entry.translation.isEmpty ? "（没有保存译文）" : entry.translation)
                             .font(.system(size: 14))
                             .lineSpacing(4)
                             .textSelection(.enabled)
-                        Text("收藏于 \(entry.createdAt.formatted(date: .abbreviated, time: .shortened))")
+                        Text((entry.origin.map { "来自 \($0) · " } ?? "") + "收藏于 \(entry.createdAt.formatted(date: .abbreviated, time: .shortened))")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }

@@ -9,15 +9,20 @@ enum SelectionReader {
     }
 
     private static func axSelectedText() -> AXResult {
-        let system = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(system, 0.5)
-        var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
-              let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return .unsupported }
+        guard let focused = ContextReader.focusedElement() else { return .unsupported }
         var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(focused as! AXUIElement, kAXSelectedTextAttribute as CFString, &value) == .success,
+        guard AXUIElementCopyAttributeValue(focused, kAXSelectedTextAttribute as CFString, &value) == .success,
               let text = value as? String else { return .unsupported }
         return .text(text)
+    }
+
+    /// 读取选中文字，并附带所在原句和来源。
+    @MainActor
+    static func capture(forceCopy: Bool) async -> Capture? {
+        guard let text = await selectedText(forceCopy: forceCopy) else { return nil }
+        return Capture(text: text,
+                       context: ContextReader.sentence(containing: text),
+                       origin: ContextReader.originDescription())
     }
 
     /// - Parameter forceCopy: 即使辅助功能返回空也尝试模拟 ⌘C（用于快捷键主动触发）。
@@ -75,7 +80,7 @@ enum SelectionReader {
 /// 监听全局鼠标事件，识别"拖选 / 双击选词"手势。
 @MainActor
 final class SelectionMonitor {
-    var onSelection: ((String, NSPoint) -> Void)?
+    var onSelection: ((Capture, NSPoint) -> Void)?
     var onMouseDown: (() -> Void)?
     var onActivity: (() -> Void)?
 
@@ -114,9 +119,9 @@ final class SelectionMonitor {
         pending = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(120))
             guard !Task.isCancelled else { return }
-            guard let text = await SelectionReader.selectedText(forceCopy: false),
-                  text.count <= 5000, !Task.isCancelled else { return }
-            self?.onSelection?(text, point)
+            guard let capture = await SelectionReader.capture(forceCopy: false),
+                  capture.text.count <= 5000, !Task.isCancelled else { return }
+            self?.onSelection?(capture, point)
         }
     }
 }

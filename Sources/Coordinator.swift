@@ -19,10 +19,10 @@ final class Coordinator {
             AXIsProcessTrustedWithOptions(options)
         }
 
-        monitor.onSelection = { [weak self] text, point in
+        monitor.onSelection = { [weak self] capture, point in
             guard let self else { return }
             self.icon.show(near: point) { [weak self] origin in
-                self?.popup.show(text: text, near: origin)
+                self?.popup.show(capture, near: origin)
             }
         }
         monitor.onMouseDown = { [weak self] in
@@ -61,8 +61,8 @@ final class Coordinator {
             return
         }
         Task {
-            if let text = await SelectionReader.selectedText(forceCopy: true) {
-                popup.show(text: text, near: point)
+            if let capture = await SelectionReader.capture(forceCopy: true) {
+                popup.show(capture, near: point)
             } else {
                 popup.showMessage("没有读取到选中的文字。", near: point)
             }
@@ -81,6 +81,7 @@ final class Coordinator {
             return
         }
 
+        let origin = ContextReader.originDescription()
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("fanyi-\(UUID().uuidString).png")
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
@@ -98,7 +99,7 @@ final class Coordinator {
                     case .some(let text) where text.isEmpty:
                         coordinator.popup.showMessage("截图中没有识别到文字。", near: point)
                     case .some(let text):
-                        coordinator.popup.show(text: text, near: point)
+                        coordinator.popup.show(Capture(text: text, origin: origin.map { "\($0)（截图）" } ?? "截图"), near: point)
                     }
                 }
             }
@@ -214,10 +215,10 @@ final class PopupController {
     private var panel: PopupPanel?
     private let size = NSSize(width: 420, height: 300)
 
-    func show(text: String, near point: NSPoint) {
+    func show(_ capture: Capture, near point: NSPoint) {
         present(near: point)
         model.inputMode = false
-        model.translate(text)
+        model.translate(capture)
     }
 
     func showMessage(_ message: String, near point: NSPoint) {
