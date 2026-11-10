@@ -7,13 +7,15 @@ final class HotKeys {
 
     private var handlers: [UInt32: () -> Void] = [:]
     private var refs: [EventHotKeyRef] = []
+    private var nextID: UInt32 = 1
     private var installed = false
 
     /// - Returns: 注册是否成功（被其他 App 占用时会失败）。
     @discardableResult
     func register(keyCode: Int, modifiers: Int, handler: @escaping () -> Void) -> Bool {
         installHandlerIfNeeded()
-        let id = UInt32(handlers.count + 1)
+        let id = nextID
+        nextID += 1
         var ref: EventHotKeyRef?
         let hotKeyID = EventHotKeyID(signature: OSType(0x46414E59), id: id) // 'FANY'
         let status = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotKeyID, GetApplicationEventTarget(), 0, &ref)
@@ -21,6 +23,12 @@ final class HotKeys {
         refs.append(ref)
         handlers[id] = handler
         return true
+    }
+
+    func unregisterAll() {
+        refs.forEach { UnregisterEventHotKey($0) }
+        refs.removeAll()
+        handlers.removeAll()
     }
 
     private func installHandlerIfNeeded() {

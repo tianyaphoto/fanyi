@@ -7,14 +7,28 @@ struct FanyiApp: App {
 
     var body: some Scene {
         MenuBarExtra("翻译神器", systemImage: "character.bubble") {
-            Button("截图翻译（⌥S）") { Coordinator.shared.captureAndTranslate() }
-            Text("划词后点击小图标，或按 ⌥D 翻译选中文字")
-            Divider()
-            Button("生词本") { Windows.showVocabulary() }
-            Button("设置…") { Windows.showSettings() }
-            Divider()
-            Button("退出") { NSApp.terminate(nil) }
+            MenuContent()
         }
+    }
+}
+
+private struct MenuContent: View {
+    private var shortcuts: ShortcutCenter { .shared }
+
+    var body: some View {
+        Button("输入翻译" + suffix(.input)) { Coordinator.shared.showInput() }
+        Button("截图翻译" + suffix(.screenshot)) { Coordinator.shared.captureAndTranslate() }
+        Text(shortcuts.display(for: .selection).map { "划词后点击小图标，或按 \($0) 翻译选中文字" } ?? "划词后点击小图标翻译选中文字")
+        Divider()
+        Button("生词本") { Windows.showVocabulary() }
+        Button("查词历史") { Windows.showHistory() }
+        Button("设置…") { Windows.showSettings() }
+        Divider()
+        Button("退出") { NSApp.terminate(nil) }
+    }
+
+    private func suffix(_ action: HotKeyAction) -> String {
+        shortcuts.display(for: action).map { "（\($0)）" } ?? ""
     }
 }
 
@@ -57,8 +71,14 @@ enum Windows {
         }
     }
 
+    static func showHistory() {
+        show(id: "history", title: "查词历史", size: NSSize(width: 780, height: 520), resizable: true) {
+            HistoryView()
+        }
+    }
+
     static func showSettings() {
-        show(id: "settings", title: "翻译神器设置", size: NSSize(width: 480, height: 560), resizable: false) {
+        show(id: "settings", title: "翻译神器设置", size: NSSize(width: 480, height: 640), resizable: false) {
             SettingsView()
         }
     }

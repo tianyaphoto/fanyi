@@ -32,12 +32,23 @@ final class Coordinator {
         monitor.onActivity = { [weak self] in self?.icon.hide() }
         monitor.start()
 
-        HotKeys.shared.register(keyCode: kVK_ANSI_S, modifiers: optionKey) {
-            MainActor.assumeIsolated { Coordinator.shared.captureAndTranslate() }
+        ShortcutCenter.shared.handler = { [weak self] action in self?.perform(action) }
+        ShortcutCenter.shared.apply()
+    }
+
+    func perform(_ action: HotKeyAction) {
+        switch action {
+        case .selection: translateSelection()
+        case .screenshot: captureAndTranslate()
+        case .input: showInput()
         }
-        HotKeys.shared.register(keyCode: kVK_ANSI_D, modifiers: optionKey) {
-            MainActor.assumeIsolated { Coordinator.shared.translateSelection() }
-        }
+    }
+
+    // MARK: 输入翻译
+
+    func showInput() {
+        icon.hide()
+        popup.showInput()
     }
 
     // MARK: 划词（快捷键）
@@ -205,12 +216,30 @@ final class PopupController {
 
     func show(text: String, near point: NSPoint) {
         present(near: point)
+        model.inputMode = false
         model.translate(text)
     }
 
     func showMessage(_ message: String, near point: NSPoint) {
         present(near: point)
         model.showMessage(message)
+    }
+
+    /// 输入翻译：像 Spotlight 一样出现在当前屏幕上方居中，并接收键盘输入。
+    func showInput() {
+        let panel = self.panel ?? makePanel()
+        self.panel = panel
+        if !(panel.isVisible && model.pinned) {
+            let mouse = NSEvent.mouseLocation
+            if let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main {
+                let visible = screen.visibleFrame
+                let origin = NSPoint(x: visible.midX - panel.frame.width / 2,
+                                     y: visible.maxY - visible.height * 0.22 - panel.frame.height)
+                panel.setFrameOrigin(origin)
+            }
+        }
+        model.startInput()
+        panel.makeKeyAndOrderFront(nil)
     }
 
     func closeIfNotPinned() {

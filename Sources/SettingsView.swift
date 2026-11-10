@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage(Settings.cliPathKey) private var cliPath = ""
     @AppStorage(Settings.selectionIconKey) private var selectionIcon = true
     @AppStorage(Settings.copyFallbackKey) private var copyFallback = true
+    @AppStorage(Settings.historyEnabledKey) private var historyEnabled = true
 
     @State private var apiKey = ""
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -54,9 +55,25 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("快捷键") {
-                LabeledContent("翻译选中文字", value: "⌥D")
-                LabeledContent("截图翻译", value: "⌥S")
+            Section {
+                ForEach(HotKeyAction.allCases) { action in
+                    LabeledContent(action.title) { ShortcutRecorder(action: action) }
+                }
+            } header: {
+                HStack {
+                    Text("快捷键")
+                    Spacer()
+                    Button("恢复默认") { ShortcutCenter.shared.resetToDefaults() }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                }
+            } footer: {
+                note("点击后按下新的组合键（需包含 ⌘、⌥ 或 ⌃），Esc 取消。")
+            }
+
+            Section("查词历史") {
+                Toggle("记录查词历史", isOn: $historyEnabled)
+                note("重复查询同一个词时会提示次数，方便发现该收藏的生词。历史只保存在本机。")
             }
 
             Section("权限") {
@@ -78,7 +95,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 560)
+        .frame(width: 480, height: 640)
         .onAppear { apiKey = Keychain.apiKey(for: provider) ?? "" }
         .onReceive(timer) { _ in
             accessibilityGranted = AXIsProcessTrusted()
@@ -129,6 +146,67 @@ struct SettingsView: View {
             } else {
                 Text("已授权").foregroundStyle(.secondary)
             }
+        }
+    }
+}
+
+/// 点击后录制一个新的全局快捷键。
+struct ShortcutRecorder: View {
+    let action: HotKeyAction
+
+    @State private var recording = false
+    @State private var monitor: Any?
+    private var center: ShortcutCenter { .shared }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if center.failed.contains(action) && !recording {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .help("这个快捷键已被其他应用占用，请换一个")
+            }
+            Button {
+                recording ? stop() : start()
+            } label: {
+                Text(recording ? "请按下快捷键…" : (center.display(for: action) ?? "未设置"))
+                    .frame(minWidth: 96)
+            }
+            if center.display(for: action) != nil && !recording {
+                Button {
+                    center.set(nil, for: action)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("清除快捷键")
+            }
+        }
+        .onDisappear { stop() }
+    }
+
+    private func start() {
+        recording = true
+        center.suspend()
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 53 { // Esc
+                stop()
+            } else if let shortcut = ShortcutCenter.make(from: event) {
+                center.set(shortcut, for: action)
+                stop()
+            } else {
+                NSSound.beep()
+            }
+            return nil
+        }
+    }
+
+    private func stop() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+        if recording {
+            recording = false
+            center.apply()
         }
     }
 }
