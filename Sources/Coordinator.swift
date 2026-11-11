@@ -86,7 +86,7 @@ final class Coordinator {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         process.arguments = ["-i", "-x", url.path] // -i 交互式框选，-x 静音
-        let useVision = Settings.screenshotVisionEnabled
+        let useVision = Settings.screenshotVisionEnabled && Settings.provider.supportsVision
         process.terminationHandler = { _ in
             let shot = Self.readScreenshot(at: url, withImage: useVision)
             try? FileManager.default.removeItem(at: url)

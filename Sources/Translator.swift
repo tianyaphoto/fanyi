@@ -54,10 +54,11 @@ enum Translator {
                         request = Request(system: systemPrompt, text: userMessage)
                     }
                     let emit: (String) -> Void = { continuation.yield($0) }
-                    switch Settings.provider {
-                    case .claude: try await runClaudeAPI(request, onText: emit)
-                    case .openai: try await runOpenAI(request, onText: emit)
-                    case .claudeCLI: try await runClaudeCLI(request, onText: emit)
+                    let provider = Settings.provider
+                    switch provider.kind {
+                    case .anthropic: try await runClaudeAPI(request, provider: provider, onText: emit)
+                    case .openAICompatible: try await runOpenAI(request, provider: provider, onText: emit)
+                    case .cli: try await runClaudeCLI(request, onText: emit)
                     }
                     continuation.finish()
                 } catch {
@@ -85,13 +86,14 @@ enum Translator {
         ] as [[String: Any]]
     }
 
-    private static func runClaudeAPI(_ input: Request, onText: (String) -> Void) async throws {
-        let apiKey = try requireKey(.claude)
-        let base = normalized(Settings.baseURL)
-        guard let url = URL(string: base + "/v1/messages") else {
-            throw TranslateError(message: "API 地址无效：\(Settings.baseURL)")
+    /// Claude API，以及接口格式相同的 Amazon Bedrock（bedrock-mantle，模型名带 anthropic. 前缀）。
+    private static func runClaudeAPI(_ input: Request, provider: Provider, onText: (String) -> Void) async throws {
+        let apiKey = try requireKey(provider)
+        let base = normalized(Settings.baseURL(for: provider))
+        guard let url = URL(string: base + "/v1/messages"), url.host != nil else {
+            throw TranslateError(message: "API 地址无效：\(base)", needsSetup: true)
         }
-        let model = Settings.model
+        let model = Settings.model(for: provider)
 
         var body: [String: Any] = [
             "model": model,
@@ -146,10 +148,16 @@ enum Translator {
 
     // MARK: - OpenAI Chat Completions（也兼容 DeepSeek 等同格式服务）
 
-    private static func runOpenAI(_ input: Request, onText: (String) -> Void) async throws {
-        let apiKey = try requireKey(.openai)
-        guard let url = URL(string: normalized(Settings.openAIBaseURL) + "/chat/completions") else {
-            throw TranslateError(message: "API 地址无效：\(Settings.openAIBaseURL)")
+    private static func runOpenAI(_ input: Request, provider: Provider, onText: (String) -> Void) async throws {
+        // 自定义服务（例如本机的 Ollama）可以不需要 API Key
+        let apiKey = provider == .custom ? (Keychain.apiKey(for: provider) ?? "") : try requireKey(provider)
+        let base = normalized(Settings.baseURL(for: provider))
+        let model = Settings.model(for: provider)
+        guard !base.isEmpty, !model.isEmpty else {
+            throw TranslateError(message: "还没有填写 \(provider.title) 的 API 地址和模型。", needsSetup: true)
+        }
+        guard let url = URL(string: base + "/chat/completions"), url.host != nil else {
+            throw TranslateError(message: "API 地址无效：\(base)", needsSetup: true)
         }
         var content: Any = input.text
         if let image = input.image {
@@ -160,7 +168,7 @@ enum Translator {
             ] as [[String: Any]]
         }
         let body: [String: Any] = [
-            "model": Settings.openAIModel,
+            "model": model,
             "stream": true,
             "messages": [
                 ["role": "system", "content": input.system],
@@ -170,7 +178,7 @@ enum Translator {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 120
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        if !apiKey.isEmpty { request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -203,7 +211,7 @@ enum Translator {
             "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
             "--system-prompt", input.system,
             "--tools", "", "--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence",
-            "--model", Settings.cliModel,
+            "--model", Settings.model(for: .claudeCLI),
         ]
         // 图片只能通过 stream-json 格式的输入传给 claude -p。
         var stdinData = Data(input.text.utf8)

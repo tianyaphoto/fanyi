@@ -1,6 +1,6 @@
 # 翻译神器（Fanyi）
 
-一个轻量的 macOS 菜单栏翻译工具：看文档时划词就能翻译，截图也能翻译，还能把不熟悉的词收进生词本。翻译由大模型完成，可以接 Claude API、OpenAI API，也可以直接调用本机的 Claude Code（`claude -p`）。
+一个轻量的 macOS 菜单栏翻译工具：看文档时划词就能翻译，截图也能翻译，还能把不熟悉的词收进生词本。翻译由大模型完成，可以接 Claude API、AWS Bedrock、OpenAI API、DeepSeek、通义千问和其他 OpenAI 兼容服务，也可以直接调用本机的 Claude Code（`claude -p`）。
 
 ## 功能
 
@@ -23,10 +23,14 @@
 | 服务 | 需要什么 | 说明 |
 |---|---|---|
 | Claude API | Claude API Key | 默认模型 `claude-opus-5-5`，想更快更省可换成 `claude-haiku-5-5`。API 地址可改。 |
-| OpenAI API | OpenAI API Key | 使用 Chat Completions 接口。改 API 地址和模型名后，也能接 DeepSeek 等同格式的服务。 |
+| AWS Bedrock（Claude） | Amazon Bedrock API Key | 通过 Bedrock 使用 Claude，填区域和带 `anthropic.` 前缀的模型名，默认 `anthropic.claude-haiku-4-5`。短期 Key 最长 12 小时有效。 |
+| OpenAI API | OpenAI API Key | 使用 Chat Completions 接口，默认模型 `gpt-5-mini`。 |
+| DeepSeek | DeepSeek API Key | 默认模型 `deepseek-chat`。不能看图。 |
+| 通义千问 | 阿里云百炼 API Key | OpenAI 兼容接口，默认模型 `qwen-plus`。 |
+| 自定义（OpenAI 兼容） | API 地址和模型名 | Kimi、智谱、硅基流动、OpenRouter 等同格式的服务；本机的 Ollama 填 `http://localhost:11434/v1`，API Key 留空。 |
 | claude -p | 已安装并登录的 [Claude Code](https://claude.com/claude-code) | 不需要 API Key，使用你的 Claude 账号额度。每次翻译要启动一次命令，比直接调 API 慢 1–2 秒。 |
 
-API Key 保存在 macOS 钥匙串中，不会写入任何文件。
+每个服务的 API Key、地址和模型分开保存，切换服务不用重填。API Key 保存在 macOS 钥匙串中，不会写入任何文件。
 
 ## 系统要求
 
@@ -72,7 +76,7 @@ cd fanyi
 - **系统词典结果**：显示哪本词典的内容取决于「词典」App 里启用的词典。想看英汉释义，请在「词典 → 设置」中勾选「牛津英汉汉英词典」。
 - **原句读取范围**：备忘录、文本编辑、Pages、预览等原生应用读取效果最好，Safari 网页通常也可以；Chrome、VS Code 等走「兼容模式」取词的应用读不到原句，可以在生词本里手动添加。
 - **截图识别效果**：OCR 支持中英文。识别出的文字如果有错字或多余断行，模型会先修正再翻译。
-- **看图翻译**：设置 → 截图翻译 里打开。默认关闭，此时截图只在本机识别，发给模型的只有文字；打开后截图会上传给所选的翻译服务。三种服务都支持，使用 OpenAI 兼容服务时所选模型需要支持图片输入。
+- **看图翻译**：设置 → 截图翻译 里打开。默认关闭，此时截图只在本机识别，发给模型的只有文字；打开后截图会上传给所选的翻译服务。使用自定义服务时所选模型需要支持图片输入；DeepSeek 和通义千问不看图，仍按本机识别处理。
 
 ## 数据存储
 
@@ -94,7 +98,7 @@ Sources/
 ├── Coordinator.swift      # 串联划词、截图、输入翻译；小图标和翻译浮窗
 ├── Selection.swift        # 读取选中文字、监听划词手势
 ├── Context.swift          # 读取原句和来源文档
-├── Translator.swift       # 三种翻译服务的流式调用
+├── Translator.swift       # 各翻译服务的流式调用
 ├── LocalDictionary.swift  # macOS 系统词典查询
 ├── TranslationView.swift  # 翻译浮窗界面
 ├── Vocabulary.swift       # 生词本

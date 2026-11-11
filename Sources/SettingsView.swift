@@ -2,13 +2,7 @@ import SwiftUI
 import ServiceManagement
 
 struct SettingsView: View {
-    @AppStorage(Settings.baseURLKey) private var baseURL = Settings.defaultBaseURL
-    @AppStorage(Settings.modelKey) private var model = Settings.defaultModel
     @AppStorage(Settings.providerKey) private var provider = Provider.claude
-    @AppStorage(Settings.openAIBaseURLKey) private var openAIBaseURL = Settings.defaultOpenAIBaseURL
-    @AppStorage(Settings.openAIModelKey) private var openAIModel = Settings.defaultOpenAIModel
-    @AppStorage(Settings.cliModelKey) private var cliModel = Settings.defaultCLIModel
-    @AppStorage(Settings.cliPathKey) private var cliPath = ""
     @AppStorage(Settings.selectionIconKey) private var selectionIcon = true
     @AppStorage(Settings.copyFallbackKey) private var copyFallback = true
     @AppStorage(Settings.historyEnabledKey) private var historyEnabled = true
@@ -27,25 +21,47 @@ struct SettingsView: View {
                 Picker("服务", selection: $provider) {
                     ForEach(Provider.allCases) { Text($0.title).tag($0) }
                 }
-                .pickerStyle(.segmented)
                 .onChange(of: provider) { _, value in apiKey = Keychain.apiKey(for: value) ?? "" }
 
-                switch provider {
-                case .claude:
-                    keyField(prompt: "sk-ant-…")
-                    TextField("API 地址", text: $baseURL, prompt: Text(Settings.defaultBaseURL))
-                    modelField($model, prompt: Settings.defaultModel, presets: Settings.presetModels)
-                    note("API Key 保存在系统钥匙串中。默认模型质量最好；想更快更省可以换成 claude-haiku-5-5。")
-                case .openai:
-                    keyField(prompt: "sk-…")
-                    TextField("API 地址", text: $openAIBaseURL, prompt: Text(Settings.defaultOpenAIBaseURL))
-                    TextField("模型", text: $openAIModel, prompt: Text(Settings.defaultOpenAIModel))
-                    note("使用 Chat Completions 接口，也兼容 DeepSeek 等同格式的服务（改 API 地址和模型名即可）。")
-                case .claudeCLI:
-                    modelField($cliModel, prompt: Settings.defaultCLIModel, presets: Settings.presetCLIModels)
-                    TextField("claude 路径", text: $cliPath, prompt: Text("留空自动查找"))
-                    note("调用本机的 Claude Code（claude -p），使用你已登录的 Claude 账号，不需要 API Key。每次翻译要启动一次命令，比直接调 API 慢 1-2 秒。")
+                Group {
+                    switch provider {
+                    case .claude:
+                        keyField(prompt: "sk-ant-…")
+                        urlField()
+                        modelField()
+                        note("API Key 保存在系统钥匙串中。默认模型质量最好；想更快更省可以换成 claude-haiku-5-5。")
+                    case .bedrock:
+                        keyField(prompt: "Amazon Bedrock API Key")
+                        StoredField("区域", key: Settings.bedrockRegionKey, prompt: Settings.defaultBedrockRegion)
+                        modelField()
+                        note("通过 Amazon Bedrock 使用 Claude，模型名带 anthropic. 前缀。在 AWS 控制台的 Amazon Bedrock → API keys 中生成 Key，并确认账号已开通所选模型。短期 Key 最长 12 小时有效，过期后要重新填写。")
+                    case .openai:
+                        keyField(prompt: "sk-…")
+                        urlField()
+                        modelField()
+                        note("使用 Chat Completions 接口。")
+                    case .deepseek:
+                        keyField(prompt: "sk-…")
+                        urlField()
+                        modelField()
+                        note("在 platform.deepseek.com 获取 API Key。DeepSeek 不能看图，截图翻译会先在本机识别文字。")
+                    case .qwen:
+                        keyField(prompt: "sk-…")
+                        urlField()
+                        modelField()
+                        note("阿里云百炼的 OpenAI 兼容接口。默认模型不能看图，截图翻译会先在本机识别文字。")
+                    case .custom:
+                        keyField(prompt: "不需要时留空")
+                        urlField(prompt: "https://…/v1")
+                        modelField()
+                        note("任何兼容 OpenAI Chat Completions 的服务，例如 Kimi、智谱、硅基流动、OpenRouter，或本机的 Ollama（地址填 http://localhost:11434/v1，API Key 留空）。")
+                    case .claudeCLI:
+                        modelField()
+                        StoredField("claude 路径", key: Settings.cliPathKey, prompt: "留空自动查找")
+                        note("调用本机的 Claude Code（claude -p），使用你已登录的 Claude 账号，不需要 API Key。每次翻译要启动一次命令，比直接调 API 慢 1-2 秒。")
+                    }
                 }
+                .id(provider)
             }
 
             Section("划词翻译") {
@@ -58,7 +74,7 @@ struct SettingsView: View {
 
             Section("截图翻译") {
                 Toggle("看图翻译：把截图直接发给模型", isOn: $screenshotVision)
-                note("对表格、公式、手写体效果更好，但更慢、更费额度，截图本身会上传给所选的翻译服务。关闭时只在本机识别文字，再发送文字。使用 OpenAI 兼容服务时，所选模型需要支持图片输入。")
+                note("对表格、公式、手写体效果更好，但更慢、更费额度，截图本身会上传给所选的翻译服务。关闭时只在本机识别文字，再发送文字。使用自定义服务时，所选模型需要支持图片输入；DeepSeek 和通义千问不看图，仍按本机识别处理。")
             }
 
             Section {
@@ -119,16 +135,15 @@ struct SettingsView: View {
             }
     }
 
-    private func modelField(_ binding: Binding<String>, prompt: String, presets: [String]) -> some View {
-        HStack {
-            TextField("模型", text: binding, prompt: Text(prompt))
-            Menu("选择") {
-                ForEach(presets, id: \.self) { name in
-                    Button(name) { binding.wrappedValue = name }
-                }
-            }
-            .fixedSize()
-        }
+    private func urlField(prompt: String? = nil) -> some View {
+        StoredField("API 地址", key: Settings.baseURLKey(for: provider),
+                    prompt: prompt ?? Settings.defaultBaseURL(for: provider))
+    }
+
+    private func modelField() -> some View {
+        StoredField("模型", key: Settings.modelKey(for: provider),
+                    prompt: Settings.defaultModel(for: provider),
+                    presets: Settings.presetModels(for: provider))
     }
 
     private func note(_ text: String) -> some View {
@@ -151,6 +166,35 @@ struct SettingsView: View {
                 }
             } else {
                 Text("已授权").foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// 直接读写某个 UserDefaults 键的文本框，可带一个预设值菜单。
+private struct StoredField: View {
+    let title: String
+    let prompt: String
+    let presets: [String]
+    @AppStorage private var value: String
+
+    init(_ title: String, key: String, prompt: String, presets: [String] = []) {
+        self.title = title
+        self.prompt = prompt
+        self.presets = presets
+        _value = AppStorage(wrappedValue: "", key)
+    }
+
+    var body: some View {
+        HStack {
+            TextField(title, text: $value, prompt: Text(prompt))
+            if !presets.isEmpty {
+                Menu("选择") {
+                    ForEach(presets, id: \.self) { name in
+                        Button(name) { value = name }
+                    }
+                }
+                .fixedSize()
             }
         }
     }
