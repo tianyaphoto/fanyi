@@ -109,6 +109,7 @@ struct VocabularyView: View {
     @State private var editingContext = false
     @State private var contextDraft = ""
     @State private var removed: (entry: VocabEntry, index: Int)?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var filtered: [VocabEntry] {
         store.entries.filter { entry in
@@ -160,13 +161,15 @@ struct VocabularyView: View {
                 Divider()
                 if let removed {
                     UndoBar(message: "已删除「\(removed.entry.text)」") {
-                        store.restore(removed.entry, at: removed.index)
+                        withAnimation(listAnimation) {
+                            store.restore(removed.entry, at: removed.index)
+                            self.removed = nil
+                        }
                         selection = removed.entry.id
-                        self.removed = nil
                     }
                     .task(id: removed.entry.id) {
                         try? await Task.sleep(for: .seconds(8))
-                        if !Task.isCancelled { self.removed = nil }
+                        if !Task.isCancelled { withAnimation(Theme.quick) { self.removed = nil } }
                     }
                 } else {
                     Text("共 \(store.entries.count) 条，已掌握 \(store.entries.filter(\.mastered).count) 条")
@@ -174,6 +177,7 @@ struct VocabularyView: View {
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                         .padding(6)
+                        .transition(.opacity)
                 }
             }
             .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
@@ -186,9 +190,19 @@ struct VocabularyView: View {
     }
 
     private func delete(_ entry: VocabEntry) {
-        guard let index = store.remove(id: entry.id) else { return }
         if selection == entry.id { selection = nil }
-        removed = (entry, index)
+        withAnimation(listAnimation) {
+            guard let index = store.remove(id: entry.id) else { return }
+            removed = (entry, index)
+        }
+    }
+
+    /// 行的删除和恢复、撤销条的出现；开了「减弱动态效果」时不移动列表行。
+    private var listAnimation: Animation? { reduceMotion ? nil : Theme.quick }
+
+    /// 标记为已掌握是少见的成就时刻，对勾弹入一次。
+    private func toggleMastered(_ entry: VocabEntry) {
+        withAnimation(reduceMotion ? Theme.quick : Theme.celebrate) { store.toggleMastered(id: entry.id) }
     }
 
     /// 列表行：生词，下面是它所在的原句（没有原句时显示释义）。
@@ -215,6 +229,7 @@ struct VocabularyView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(Theme.success)
                     .accessibilityLabel("已掌握")
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity))
             }
         }
         .padding(.vertical, 3)
@@ -222,7 +237,7 @@ struct VocabularyView: View {
 
     @ViewBuilder
     private func actions(for entry: VocabEntry) -> some View {
-        Button(entry.mastered ? "标记为未掌握" : "标记为已掌握") { store.toggleMastered(id: entry.id) }
+        Button(entry.mastered ? "标记为未掌握" : "标记为已掌握") { toggleMastered(entry) }
         Button("复制原文") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(entry.text, forType: .string)
@@ -301,7 +316,7 @@ struct VocabularyView: View {
                 }
                 Divider()
                 HStack {
-                    Button(entry.mastered ? "标记为未掌握" : "标记为已掌握") { store.toggleMastered(id: entry.id) }
+                    Button(entry.mastered ? "标记为未掌握" : "标记为已掌握") { toggleMastered(entry) }
                     Spacer()
                     Button("删除", role: .destructive) { delete(entry) }
                 }

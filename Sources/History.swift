@@ -99,6 +99,7 @@ struct HistoryView: View {
     @State private var selection: HistoryEntry.ID?
     @State private var confirmClear = false
     @State private var removed: (entry: HistoryEntry, index: Int)?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var filtered: [HistoryEntry] {
         guard !query.isEmpty else { return store.entries }
@@ -139,13 +140,15 @@ struct HistoryView: View {
                 Divider()
                 if let removed {
                     UndoBar(message: "已删除「\(removed.entry.text)」") {
-                        store.restore(removed.entry, at: removed.index)
+                        withAnimation(listAnimation) {
+                            store.restore(removed.entry, at: removed.index)
+                            self.removed = nil
+                        }
                         selection = removed.entry.id
-                        self.removed = nil
                     }
                     .task(id: removed.entry.id) {
                         try? await Task.sleep(for: .seconds(8))
-                        if !Task.isCancelled { self.removed = nil }
+                        if !Task.isCancelled { withAnimation(Theme.quick) { self.removed = nil } }
                     }
                 } else {
                     HStack {
@@ -159,6 +162,7 @@ struct HistoryView: View {
                             .disabled(store.entries.isEmpty)
                     }
                     .padding(6)
+                    .transition(.opacity)
                 }
             }
             .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
@@ -179,10 +183,15 @@ struct HistoryView: View {
     }
 
     private func delete(_ entry: HistoryEntry) {
-        guard let index = store.remove(id: entry.id) else { return }
         if selection == entry.id { selection = nil }
-        removed = (entry, index)
+        withAnimation(listAnimation) {
+            guard let index = store.remove(id: entry.id) else { return }
+            removed = (entry, index)
+        }
     }
+
+    /// 行的删除和恢复、撤销条的出现；开了「减弱动态效果」时不移动列表行。
+    private var listAnimation: Animation? { reduceMotion ? nil : Theme.quick }
 
     private func row(_ entry: HistoryEntry) -> some View {
         HStack(spacing: Theme.gapS) {

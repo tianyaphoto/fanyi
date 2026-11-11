@@ -26,6 +26,17 @@ enum Theme {
     static let success = Color.green
     static let danger = Color.red
 
+    // MARK: 动效（只用于反馈和状态变化，都在 300 毫秒以内）
+
+    /// 按下反馈
+    static let press = Animation.easeOut(duration: 0.12)
+    /// 出现、消失、图标切换
+    static let quick = Animation.easeOut(duration: 0.2)
+    /// 展开、收起
+    static let expand = Animation.snappy(duration: 0.25)
+    /// 少见的成就时刻（标记为已掌握），允许一点回弹
+    static let celebrate = Animation.spring(duration: 0.35, bounce: 0.4)
+
     // MARK: 圆角与间距
 
     static let radius: CGFloat = 8
@@ -57,19 +68,41 @@ struct SectionLabel: View {
     }
 }
 
-/// 只有图标的按钮，带悬停底色。
+/// 按下时轻微缩小；开了「减弱动态效果」时改成变淡。
+struct PressFeedbackStyle: ButtonStyle {
+    let reduceMotion: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .opacity(configuration.isPressed && reduceMotion ? 0.6 : 1)
+            .animation(Theme.press, value: configuration.isPressed)
+    }
+}
+
+/// 只有图标的按钮，带悬停底色和按下反馈。
 struct IconButton: View {
     let symbol: String
     let help: String
     var tint: Color? = nil
+    /// 每加一次，图标弹一下（例如收藏成功）
+    var bounce: Int = 0
+    /// 为 true 期间图标逐层亮起（例如正在朗读）
+    var isActive: Bool = false
     let action: () -> Void
 
     @State private var hovering = false
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
+                .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: bounce)
+                .symbolEffect(.variableColor.iterative, isActive: isActive)
+                .symbolEffectsRemoved(reduceMotion)
+                .animation(Theme.quick, value: symbol)
                 .font(Theme.icon)
                 .foregroundStyle(tint ?? Color.secondary)
                 .frame(width: 26, height: 24)
@@ -77,7 +110,7 @@ struct IconButton: View {
                     .fill(hovering && isEnabled ? Theme.hover : Color.clear))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressFeedbackStyle(reduceMotion: reduceMotion))
         .onHover { hovering = $0 }
         .help(help)
         .accessibilityLabel(help)
@@ -151,7 +184,10 @@ struct UndoBar: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(Theme.surface)
+        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
     }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 }
 
 /// 等待译文时的占位：几行和正文同形状的灰条。

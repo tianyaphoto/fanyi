@@ -29,8 +29,25 @@ final class TranslationModel {
     private var lastCapture: Capture?
     var canRetry: Bool { errorMessage != nil && lastCapture != nil }
 
+    /// 正在朗读原文
+    var isSpeaking = false
+
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private let speaker = AVSpeechSynthesizer()
+    @ObservationIgnored private let speechDelegate = SpeechDelegate()
+    @ObservationIgnored private var speakingID: ObjectIdentifier?
+
+    init() {
+        speechDelegate.onEnd = { [weak self] id in
+            Task { @MainActor in
+                // 只处理当前这一段：上一段被打断时的回调可能晚于新一段开始
+                guard let self, self.speakingID == id else { return }
+                self.speakingID = nil
+                self.isSpeaking = false
+            }
+        }
+        speaker.delegate = speechDelegate
+    }
 
     func retry() {
         if let lastCapture { translate(lastCapture, isRetry: true) }
@@ -113,6 +130,12 @@ final class TranslationModel {
         task?.cancel()
         task = nil
         isLoading = false
+        stopSpeaking()
+    }
+
+    private func stopSpeaking() {
+        speakingID = nil
+        isSpeaking = false
         speaker.stopSpeaking(at: .immediate)
     }
 
@@ -134,10 +157,15 @@ final class TranslationModel {
 
     func speak() {
         guard !source.isEmpty else { return }
-        speaker.stopSpeaking(at: .immediate)
+        // 朗读中再点一次就是停止
+        let wasSpeaking = isSpeaking
+        stopSpeaking()
+        if wasSpeaking { return }
         let utterance = AVSpeechUtterance(string: source)
         let isChinese = source.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
         utterance.voice = AVSpeechSynthesisVoice(language: isChinese ? "zh-CN" : "en-US")
+        speakingID = ObjectIdentifier(utterance)
+        isSpeaking = true
         speaker.speak(utterance)
     }
 
@@ -147,12 +175,29 @@ final class TranslationModel {
     }
 }
 
+/// 朗读结束或被打断时通知模型。
+private final class SpeechDelegate: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
+    var onEnd: (@Sendable (ObjectIdentifier) -> Void)?
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        onEnd?(ObjectIdentifier(utterance))
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        onEnd?(ObjectIdentifier(utterance))
+    }
+}
+
 struct TranslationView: View {
     @Bindable var model: TranslationModel
     var onClose: () -> Void
 
     @FocusState private var inputFocused: Bool
     @State private var showFullLocal = false
+    @State private var copied = false
+    @State private var copyTick = 0
+    @State private var favoriteBounce = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -182,7 +227,16 @@ struct TranslationView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(.regularMaterial)
         .ignoresSafeArea()
-        .onChange(of: model.source) { showFullLocal = false }
+        .onChange(of: model.source) {
+            showFullLocal = false
+            copied = false
+        }
+        .task(id: copyTick) {
+            // 复制成功的对勾停留一会儿再换回
+            guard copyTick > 0 else { return }
+            try? await Task.sleep(for: .milliseconds(1200))
+            if !Task.isCancelled { copied = false }
+        }
         .task(id: model.focusRequest) {
             guard model.inputMode else { return }
             try? await Task.sleep(for: .milliseconds(60))
@@ -237,16 +291,24 @@ struct TranslationView: View {
 
             HStack(spacing: 0) {
                 if !model.source.isEmpty {
-                    IconButton(symbol: "speaker.wave.2", help: "朗读原文") { model.speak() }
+                    IconButton(symbol: "speaker.wave.2", help: model.isSpeaking ? "停止朗读" : "朗读原文",
+                               tint: model.isSpeaking ? Theme.accent : nil,
+                               isActive: model.isSpeaking) { model.speak() }
                 }
                 if !model.source.isEmpty || model.fromImage {
-                    IconButton(symbol: "doc.on.doc", help: "复制译文") { model.copyResult() }
+                    IconButton(symbol: copied ? "checkmark" : "doc.on.doc", help: copied ? "已复制" : "复制译文",
+                               tint: copied ? Theme.success : nil) {
+                        model.copyResult()
+                        copied = true
+                        copyTick += 1
+                    }
                         .disabled(model.result.isEmpty && model.localDefinition == nil)
                 }
                 if !model.source.isEmpty {
                     IconButton(symbol: model.isFavorited ? "star.fill" : "star",
                                help: model.isFavorited ? "从生词本移除" : "收藏到生词本",
-                               tint: model.isFavorited ? Theme.favorite : nil) { model.toggleFavorite() }
+                               tint: model.isFavorited ? Theme.favorite : nil,
+                               bounce: favoriteBounce) { toggleFavorite() }
                 }
                 IconButton(symbol: model.pinned ? "pin.fill" : "pin", help: model.pinned ? "取消固定" : "固定浮窗",
                            tint: model.pinned ? Theme.accent : nil) { model.pinned.toggle() }
@@ -264,7 +326,7 @@ struct TranslationView: View {
                 .monospacedDigit()
             Spacer()
             if !model.isFavorited {
-                Button("加入生词本") { model.toggleFavorite() }
+                Button("加入生词本") { toggleFavorite() }
                     .buttonStyle(.link)
             } else {
                 Text("已在生词本中").foregroundStyle(.secondary)
@@ -274,6 +336,12 @@ struct TranslationView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 5)
         .background(Theme.repeated.opacity(model.lookupCount >= 3 ? 0.18 : 0.10))
+    }
+
+    /// 收藏时让星标弹一下；取消收藏不弹。
+    private func toggleFavorite() {
+        if !model.isFavorited { favoriteBounce += 1 }
+        model.toggleFavorite()
     }
 
     // MARK: 内容
@@ -288,7 +356,9 @@ struct TranslationView: View {
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if text.split(separator: "\n").count > 6 || text.count > 300 {
-                Button(showFullLocal ? "收起" : "展开全部") { showFullLocal.toggle() }
+                Button(showFullLocal ? "收起" : "展开全部") {
+                    withAnimation(reduceMotion ? nil : Theme.expand) { showFullLocal.toggle() }
+                }
                     .buttonStyle(.link)
                     .font(Theme.caption)
             }
