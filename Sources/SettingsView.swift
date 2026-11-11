@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(Settings.selectionIconKey) private var selectionIcon = true
     @AppStorage(Settings.copyFallbackKey) private var copyFallback = true
     @AppStorage(Settings.historyEnabledKey) private var historyEnabled = true
+    @AppStorage(Settings.screenshotVisionKey) private var screenshotVision = false
 
     @State private var apiKey = ""
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -53,6 +54,11 @@ struct SettingsView: View {
                 Text("兼容模式用于 Chrome、VS Code 等应用，取词后会自动恢复剪贴板。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("截图翻译") {
+                Toggle("看图翻译：把截图直接发给模型", isOn: $screenshotVision)
+                note("对表格、公式、手写体效果更好，但更慢、更费额度，截图本身会上传给所选的翻译服务。关闭时只在本机识别文字，再发送文字。使用 OpenAI 兼容服务时，所选模型需要支持图片输入。")
             }
 
             Section {

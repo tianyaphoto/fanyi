@@ -86,20 +86,21 @@ final class Coordinator {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         process.arguments = ["-i", "-x", url.path] // -i 交互式框选，-x 静音
+        let useVision = Settings.screenshotVisionEnabled
         process.terminationHandler = { _ in
-            let text = Self.recognizeText(at: url)
+            let shot = Self.readScreenshot(at: url, withImage: useVision)
             try? FileManager.default.removeItem(at: url)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     let coordinator = Coordinator.shared
                     coordinator.capturing = false
                     let point = NSEvent.mouseLocation
-                    switch text {
-                    case .none: break // 用户按 Esc 取消了截图
-                    case .some(let text) where text.isEmpty:
+                    guard let shot else { return } // 用户按 Esc 取消了截图
+                    if shot.text.isEmpty && shot.image == nil {
                         coordinator.popup.showMessage("截图中没有识别到文字。", near: point)
-                    case .some(let text):
-                        coordinator.popup.show(Capture(text: text, origin: origin.map { "\($0)（截图）" } ?? "截图"), near: point)
+                    } else {
+                        coordinator.popup.show(Capture(text: shot.text, origin: origin.map { "\($0)（截图）" } ?? "截图",
+                                                       image: shot.image), near: point)
                     }
                 }
             }
@@ -112,10 +113,42 @@ final class Coordinator {
         }
     }
 
-    /// 本地 OCR（Apple Vision）。返回 nil 表示没有截图文件（用户取消）。
-    nonisolated private static func recognizeText(at url: URL) -> String? {
+    private struct Shot {
+        var text: String
+        var image: ImageAttachment?
+    }
+
+    /// 读取截图：本地 OCR（Apple Vision），看图翻译时再附上图片本身。返回 nil 表示没有截图文件（用户取消）。
+    nonisolated private static func readScreenshot(at url: URL, withImage: Bool) -> Shot? {
         guard let image = NSImage(contentsOf: url),
               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        return Shot(text: recognizeText(in: cgImage), image: withImage ? attachment(from: cgImage) : nil)
+    }
+
+    /// 压到模型接口能接受的大小：长边不超过 2000 像素，PNG 过大时改用 JPEG。
+    nonisolated private static func attachment(from cgImage: CGImage) -> ImageAttachment? {
+        let width = CGFloat(cgImage.width), height = CGFloat(cgImage.height)
+        let scale = min(1, 2000 / max(width, height))
+        var output = cgImage
+        if scale < 1 {
+            let size = CGSize(width: (width * scale).rounded(), height: (height * scale).rounded())
+            guard let context = CGContext(data: nil, width: Int(size.width), height: Int(size.height),
+                                          bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+            context.interpolationQuality = .high
+            context.draw(cgImage, in: CGRect(origin: .zero, size: size))
+            guard let scaled = context.makeImage() else { return nil }
+            output = scaled
+        }
+        let rep = NSBitmapImageRep(cgImage: output)
+        if let png = rep.representation(using: .png, properties: [:]), png.count <= 3_000_000 {
+            return ImageAttachment(data: png, mediaType: "image/png")
+        }
+        guard let jpeg = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else { return nil }
+        return ImageAttachment(data: jpeg, mediaType: "image/jpeg")
+    }
+
+    nonisolated private static func recognizeText(in cgImage: CGImage) -> String {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true

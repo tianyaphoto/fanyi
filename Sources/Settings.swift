@@ -35,6 +35,7 @@ enum Settings {
     static let selectionIconKey = "selectionIconEnabled"
     static let copyFallbackKey = "copyFallbackEnabled"
     static let historyEnabledKey = "historyEnabled"
+    static let screenshotVisionKey = "screenshotVisionEnabled"
 
     static let defaultBaseURL = "https://api.anthropic.com"
     static let defaultModel = "claude-opus-5-5"
@@ -58,6 +59,7 @@ enum Settings {
             selectionIconKey: true,
             copyFallbackKey: true,
             historyEnabledKey: true,
+            screenshotVisionKey: false,
         ])
     }
 
@@ -80,6 +82,7 @@ enum Settings {
     static var selectionIconEnabled: Bool { UserDefaults.standard.bool(forKey: selectionIconKey) }
     static var copyFallbackEnabled: Bool { UserDefaults.standard.bool(forKey: copyFallbackKey) }
     static var historyEnabled: Bool { UserDefaults.standard.bool(forKey: historyEnabledKey) }
+    static var screenshotVisionEnabled: Bool { UserDefaults.standard.bool(forKey: screenshotVisionKey) }
 }
 
 /// API Key 存在系统钥匙串里，每个服务一条。

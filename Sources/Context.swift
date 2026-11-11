@@ -8,6 +8,13 @@ struct Capture {
     var text: String
     var context: String? = nil
     var origin: String? = nil
+    /// 看图翻译时附带的截图；此时 text 是本地 OCR 的结果（可能为空），只用于显示和历史记录。
+    var image: ImageAttachment? = nil
+}
+
+struct ImageAttachment {
+    let data: Data
+    let mediaType: String
 }
 
 /// 读取选中内容所在的句子，以及来源 App / 文档标题。

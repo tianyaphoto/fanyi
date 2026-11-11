@@ -17,6 +17,8 @@ final class TranslationModel {
     var isFavorited = false
     /// 这是第几次查这个词（0 表示未记录历史）。
     var lookupCount = 0
+    /// 看图翻译：截图本身发给了模型，source 是本地 OCR 的文字（可能为空）。
+    var fromImage = false
 
     /// 输入翻译模式：浮窗顶部显示输入框。
     var inputMode = false
@@ -28,22 +30,24 @@ final class TranslationModel {
 
     func translate(_ capture: Capture) {
         let text = capture.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty || capture.image != nil else { return }
         cancel()
+        fromImage = capture.image != nil
         source = text
         context = capture.context
         origin = capture.origin
         result = ""
         errorMessage = nil
         needsAPIKey = false
-        isFavorited = VocabularyStore.shared.contains(text)
-        localDefinition = LocalDictionary.lookup(text)
-        lookupCount = HistoryStore.shared.record(text, context: context, origin: origin)
+        // 看图翻译而本地又没识别出文字时，没有可以查词典、记历史的原文
+        isFavorited = !text.isEmpty && VocabularyStore.shared.contains(text)
+        localDefinition = text.isEmpty ? nil : LocalDictionary.lookup(text)
+        lookupCount = text.isEmpty ? 0 : HistoryStore.shared.record(text, context: context, origin: origin)
 
         isLoading = true
         task = Task {
             do {
-                for try await chunk in Translator.stream(text: text, context: context) {
+                for try await chunk in Translator.stream(text: text, context: context, image: capture.image) {
                     result += chunk
                 }
                 if Task.isCancelled { return }
@@ -81,6 +85,7 @@ final class TranslationModel {
 
     private func reset() {
         source = ""
+        fromImage = false
         context = nil
         origin = nil
         result = ""
@@ -151,7 +156,7 @@ struct TranslationView: View {
                     aiSection
                     if let error = model.errorMessage {
                         Text(error)
-                            .foregroundStyle(model.source.isEmpty ? Color.primary : Color.red)
+                            .foregroundStyle(model.source.isEmpty && !model.fromImage ? Color.primary : Color.red)
                             .textSelection(.enabled)
                         if model.needsAPIKey {
                             Button("打开设置") {
@@ -195,7 +200,7 @@ struct TranslationView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(model.source.isEmpty ? "翻译神器" : model.source)
+                    Text(model.source.isEmpty ? (model.fromImage ? "截图（看图翻译）" : "翻译神器") : model.source)
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
@@ -214,8 +219,12 @@ struct TranslationView: View {
             HStack(spacing: 2) {
                 if !model.source.isEmpty {
                     iconButton("speaker.wave.2", help: "朗读原文") { model.speak() }
+                }
+                if !model.source.isEmpty || model.fromImage {
                     iconButton("doc.on.doc", help: "复制译文") { model.copyResult() }
                         .disabled(model.result.isEmpty && model.localDefinition == nil)
+                }
+                if !model.source.isEmpty {
                     iconButton(model.isFavorited ? "star.fill" : "star",
                                help: model.isFavorited ? "从生词本移除" : "收藏到生词本",
                                tint: model.isFavorited ? .yellow : nil) { model.toggleFavorite() }
