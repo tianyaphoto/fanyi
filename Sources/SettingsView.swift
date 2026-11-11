@@ -68,7 +68,7 @@ struct SettingsView: View {
                 Toggle("选中文字后显示翻译小图标", isOn: $selectionIcon)
                 Toggle("兼容模式：读取不到选中文字时模拟 ⌘C", isOn: $copyFallback)
                 Text("兼容模式用于 Chrome、VS Code 等应用，取词后会自动恢复剪贴板。")
-                    .font(.caption)
+                    .font(Theme.caption)
                     .foregroundStyle(.secondary)
             }
 
@@ -87,7 +87,7 @@ struct SettingsView: View {
                     Spacer()
                     Button("恢复默认") { ShortcutCenter.shared.resetToDefaults() }
                         .buttonStyle(.link)
-                        .font(.caption)
+                        .font(Theme.caption)
                 }
             } footer: {
                 note("点击后按下新的组合键（需包含 ⌘、⌥ 或 ⌃），Esc 取消。")
@@ -148,14 +148,14 @@ struct SettingsView: View {
 
     private func note(_ text: String) -> some View {
         Text(text)
-            .font(.caption)
+            .font(Theme.caption)
             .foregroundStyle(.secondary)
     }
 
     private func permissionRow(_ title: String, granted: Bool, pane: String) -> some View {
         HStack {
             Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(granted ? .green : .orange)
+                .foregroundStyle(granted ? Theme.success : Theme.repeated)
             Text(title)
             Spacer()
             if !granted {
@@ -212,8 +212,9 @@ struct ShortcutRecorder: View {
         HStack(spacing: 6) {
             if center.failed.contains(action) && !recording {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Theme.repeated)
                     .help("这个快捷键已被其他应用占用，请换一个")
+                    .accessibilityLabel("快捷键被占用")
             }
             Button {
                 recording ? stop() : start()

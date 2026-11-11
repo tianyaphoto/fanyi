@@ -25,13 +25,22 @@ final class TranslationModel {
     var inputText = ""
     var focusRequest = 0
 
+    /// 最近一次请求，出错后重试用
+    private var lastCapture: Capture?
+    var canRetry: Bool { errorMessage != nil && lastCapture != nil }
+
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private let speaker = AVSpeechSynthesizer()
 
-    func translate(_ capture: Capture) {
+    func retry() {
+        if let lastCapture { translate(lastCapture, isRetry: true) }
+    }
+
+    func translate(_ capture: Capture, isRetry: Bool = false) {
         let text = capture.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || capture.image != nil else { return }
         cancel()
+        lastCapture = capture
         fromImage = capture.image != nil
         source = text
         context = capture.context
@@ -42,7 +51,10 @@ final class TranslationModel {
         // 看图翻译而本地又没识别出文字时，没有可以查词典、记历史的原文
         isFavorited = !text.isEmpty && VocabularyStore.shared.contains(text)
         localDefinition = text.isEmpty ? nil : LocalDictionary.lookup(text)
-        lookupCount = text.isEmpty ? 0 : HistoryStore.shared.record(text, context: context, origin: origin)
+        // 重试不算一次新的查询
+        if !isRetry {
+            lookupCount = text.isEmpty ? 0 : HistoryStore.shared.record(text, context: context, origin: origin)
+        }
 
         isLoading = true
         task = Task {
@@ -85,6 +97,7 @@ final class TranslationModel {
 
     private func reset() {
         source = ""
+        lastCapture = nil
         fromImage = false
         context = nil
         origin = nil
@@ -149,26 +162,18 @@ struct TranslationView: View {
             }
             Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Theme.gapM) {
                     if let local = model.localDefinition {
                         localSection(local)
                     }
                     aiSection
                     if let error = model.errorMessage {
-                        Text(error)
-                            .foregroundStyle(model.source.isEmpty && !model.fromImage ? Color.primary : Color.red)
-                            .textSelection(.enabled)
-                        if model.needsAPIKey {
-                            Button("打开设置") {
-                                onClose()
-                                Windows.showSettings()
-                            }
-                        }
+                        messageSection(error)
                     }
                     if model.inputMode && model.source.isEmpty && model.errorMessage == nil {
-                        Text("输入单词或句子后按 ↩ 翻译，⌥↩ 换行")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.tertiary)
+                        Text("输入单词或句子后按 ↩ 翻译，⌥↩ 换行。")
+                            .font(Theme.body)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .padding(14)
@@ -187,28 +192,42 @@ struct TranslationView: View {
 
     // MARK: 顶部
 
+    /// 查的是单词或短语时，把它当标题显示；整句、整段则缩成几行小字。
+    private var isTerm: Bool {
+        !model.source.isEmpty && model.source.count <= 40 && !model.source.contains("\n")
+    }
+
     private var header: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: Theme.gapS) {
             if model.inputMode {
                 TextField("输入要翻译的内容", text: $model.inputText, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 15))
+                    .font(Theme.reading)
                     .lineLimit(1...5)
                     .focused($inputFocused)
                     .onSubmit { model.submitInput() }
                     .onExitCommand { onClose() }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 2)
             } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(model.source.isEmpty ? (model.fromImage ? "截图（看图翻译）" : "翻译神器") : model.source)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                        .textSelection(.enabled)
+                VStack(alignment: .leading, spacing: Theme.gapXS) {
+                    if isTerm {
+                        Text(model.source)
+                            .font(Theme.heading)
+                            .lineLimit(2)
+                            .textSelection(.enabled)
+                    } else {
+                        Text(model.source.isEmpty ? (model.fromImage ? "截图（看图翻译）" : "翻译神器") : model.source)
+                            .font(Theme.body)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                            .textSelection(.enabled)
+                            .padding(.top, 3)
+                    }
                     if let context = model.context {
                         Text(highlighted(context, term: model.source))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
+                            .font(Theme.caption)
+                            .foregroundStyle(.secondary)
                             .lineLimit(2)
                             .help(context)
                     }
@@ -216,32 +235,33 @@ struct TranslationView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            HStack(spacing: 2) {
+            HStack(spacing: 0) {
                 if !model.source.isEmpty {
-                    iconButton("speaker.wave.2", help: "朗读原文") { model.speak() }
+                    IconButton(symbol: "speaker.wave.2", help: "朗读原文") { model.speak() }
                 }
                 if !model.source.isEmpty || model.fromImage {
-                    iconButton("doc.on.doc", help: "复制译文") { model.copyResult() }
+                    IconButton(symbol: "doc.on.doc", help: "复制译文") { model.copyResult() }
                         .disabled(model.result.isEmpty && model.localDefinition == nil)
                 }
                 if !model.source.isEmpty {
-                    iconButton(model.isFavorited ? "star.fill" : "star",
+                    IconButton(symbol: model.isFavorited ? "star.fill" : "star",
                                help: model.isFavorited ? "从生词本移除" : "收藏到生词本",
-                               tint: model.isFavorited ? .yellow : nil) { model.toggleFavorite() }
+                               tint: model.isFavorited ? Theme.favorite : nil) { model.toggleFavorite() }
                 }
-                iconButton(model.pinned ? "pin.fill" : "pin", help: model.pinned ? "取消固定" : "固定浮窗",
-                           tint: model.pinned ? .accentColor : nil) { model.pinned.toggle() }
-                iconButton("xmark", help: "关闭（Esc）") { onClose() }
+                IconButton(symbol: model.pinned ? "pin.fill" : "pin", help: model.pinned ? "取消固定" : "固定浮窗",
+                           tint: model.pinned ? Theme.accent : nil) { model.pinned.toggle() }
+                IconButton(symbol: "xmark", help: "关闭（Esc）") { onClose() }
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
         .padding(.vertical, 10)
     }
 
     private var repeatHint: some View {
         HStack(spacing: 6) {
-            Image(systemName: "clock.arrow.circlepath")
             Text("这是你第 \(model.lookupCount) 次查询")
+                .monospacedDigit()
             Spacer()
             if !model.isFavorited {
                 Button("加入生词本") { model.toggleFavorite() }
@@ -250,19 +270,19 @@ struct TranslationView: View {
                 Text("已在生词本中").foregroundStyle(.secondary)
             }
         }
-        .font(.system(size: 11))
+        .font(Theme.caption)
         .padding(.horizontal, 14)
         .padding(.vertical, 5)
-        .background(Color.orange.opacity(model.lookupCount >= 3 ? 0.18 : 0.10))
+        .background(Theme.repeated.opacity(model.lookupCount >= 3 ? 0.18 : 0.10))
     }
 
     // MARK: 内容
 
     private func localSection(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("系统词典", systemImage: "book.closed")
+            SectionLabel("系统词典")
             Text(text)
-                .font(.system(size: 13))
+                .font(Theme.body)
                 .lineSpacing(3)
                 .lineLimit(showFullLocal ? nil : 6)
                 .textSelection(.enabled)
@@ -270,11 +290,10 @@ struct TranslationView: View {
             if text.split(separator: "\n").count > 6 || text.count > 300 {
                 Button(showFullLocal ? "收起" : "展开全部") { showFullLocal.toggle() }
                     .buttonStyle(.link)
-                    .font(.system(size: 11))
+                    .font(Theme.caption)
             }
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+        .surface()
     }
 
     @ViewBuilder
@@ -282,39 +301,48 @@ struct TranslationView: View {
         if !model.result.isEmpty || model.isLoading {
             VStack(alignment: .leading, spacing: 6) {
                 if model.localDefinition != nil {
-                    sectionLabel("AI 释义", systemImage: "sparkles")
+                    SectionLabel("AI 释义")
                 }
                 if !model.result.isEmpty {
                     Text(model.result)
-                        .font(.system(size: 14))
+                        // 单词释义条目多，用正文字号；整句译文用大一号方便阅读
+                        .font(isTerm ? Theme.body : Theme.reading)
                         .lineSpacing(4)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("翻译中…").foregroundStyle(.secondary)
-                    }
+                    SkeletonLines()
+                        .padding(.top, 2)
                 }
             }
         }
     }
 
-    private func sectionLabel(_ title: String, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(.secondary)
-    }
-
-    private func iconButton(_ symbol: String, help: String, tint: Color? = nil, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(tint ?? Color.secondary)
-                .frame(width: 24, height: 22)
-                .contentShape(Rectangle())
+    /// 出错（可以重试）或普通提示（例如没有读取到选中的文字）。
+    private func messageSection(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: Theme.gapS) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if model.canRetry {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Theme.danger)
+                        .accessibilityLabel("出错")
+                }
+                Text(message)
+                    .textSelection(.enabled)
+            }
+            .font(Theme.body)
+            if model.canRetry {
+                HStack(spacing: Theme.gapS) {
+                    Button("重试") { model.retry() }
+                    if model.needsAPIKey {
+                        Button("打开设置") {
+                            onClose()
+                            Windows.showSettings()
+                        }
+                    }
+                }
+                .controlSize(.small)
+            }
         }
-        .buttonStyle(.plain)
-        .help(help)
     }
 }

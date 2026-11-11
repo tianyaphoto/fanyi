@@ -8,7 +8,7 @@ struct VocabEntry: Codable, Identifiable, Hashable {
     var mastered = false
     /// 收藏时所在的原句
     var context: String?
-    /// 来源 App / 文档，例如「预览 · paper.pdf」
+    /// 来源 App / 文档，例如「预览：paper.pdf」
     var origin: String?
 }
 
@@ -70,8 +70,18 @@ final class VocabularyStore {
         persist()
     }
 
-    func remove(id: VocabEntry.ID) {
-        entries.removeAll { $0.id == id }
+    /// 删除一条，返回它原来的位置，供撤销时放回。
+    @discardableResult
+    func remove(id: VocabEntry.ID) -> Int? {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return nil }
+        entries.remove(at: index)
+        persist()
+        return index
+    }
+
+    func restore(_ entry: VocabEntry, at index: Int) {
+        guard !entries.contains(where: { $0.id == entry.id }) else { return }
+        entries.insert(entry, at: min(max(index, 0), entries.count))
         persist()
     }
 
@@ -98,6 +108,7 @@ struct VocabularyView: View {
     @State private var selection: VocabEntry.ID?
     @State private var editingContext = false
     @State private var contextDraft = ""
+    @State private var removed: (entry: VocabEntry, index: Int)?
 
     private var filtered: [VocabEntry] {
         store.entries.filter { entry in
@@ -116,8 +127,8 @@ struct VocabularyView: View {
     var body: some View {
         HSplitView {
             VStack(spacing: 0) {
-                VStack(spacing: 8) {
-                    TextField("搜索生词或释义", text: $query)
+                VStack(spacing: Theme.gapS) {
+                    TextField("搜索生词、释义或原句", text: $query)
                         .textFieldStyle(.roundedBorder)
                     Picker("", selection: $filter) {
                         ForEach(Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
@@ -127,12 +138,17 @@ struct VocabularyView: View {
                 }
                 .padding(10)
 
-                if filtered.isEmpty {
-                    Spacer()
-                    Text(store.entries.isEmpty ? "还没有收藏。\n翻译时点击 ☆ 即可加入生词本。" : "没有符合条件的生词")
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                if store.entries.isEmpty {
+                    EmptyState(title: "生词本还是空的",
+                               detail: "翻译时点一下星标，这个词会连同它所在的原句一起收进来，方便回头复习。",
+                               actionTitle: "输入翻译") { Coordinator.shared.showInput() }
+                } else if filtered.isEmpty {
+                    EmptyState(title: "没有符合条件的生词",
+                               detail: "换一个关键词，或者切回「全部」。",
+                               actionTitle: "清除筛选") {
+                        query = ""
+                        filter = .all
+                    }
                 } else {
                     List(filtered, selection: $selection) { entry in
                         row(entry)
@@ -142,10 +158,23 @@ struct VocabularyView: View {
                 }
 
                 Divider()
-                Text("共 \(store.entries.count) 条，已掌握 \(store.entries.filter(\.mastered).count) 条")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(6)
+                if let removed {
+                    UndoBar(message: "已删除「\(removed.entry.text)」") {
+                        store.restore(removed.entry, at: removed.index)
+                        selection = removed.entry.id
+                        self.removed = nil
+                    }
+                    .task(id: removed.entry.id) {
+                        try? await Task.sleep(for: .seconds(8))
+                        if !Task.isCancelled { self.removed = nil }
+                    }
+                } else {
+                    Text("共 \(store.entries.count) 条，已掌握 \(store.entries.filter(\.mastered).count) 条")
+                        .font(Theme.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .padding(6)
+                }
             }
             .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
 
@@ -156,12 +185,56 @@ struct VocabularyView: View {
         .onChange(of: selection) { editingContext = false }
     }
 
+    private func delete(_ entry: VocabEntry) {
+        guard let index = store.remove(id: entry.id) else { return }
+        if selection == entry.id { selection = nil }
+        removed = (entry, index)
+    }
+
+    /// 列表行：生词，下面是它所在的原句（没有原句时显示释义）。
+    private func row(_ entry: VocabEntry) -> some View {
+        HStack(spacing: Theme.gapS) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.text)
+                    .font(Theme.bodyStrong)
+                    .lineLimit(2)
+                if let context = entry.context {
+                    Text(highlighted(context, term: entry.text))
+                        .font(Theme.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else {
+                    Text(entry.translation.replacingOccurrences(of: "\n", with: " "))
+                        .font(Theme.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+            if entry.mastered {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Theme.success)
+                    .accessibilityLabel("已掌握")
+            }
+        }
+        .padding(.vertical, 3)
+    }
+
+    @ViewBuilder
+    private func actions(for entry: VocabEntry) -> some View {
+        Button(entry.mastered ? "标记为未掌握" : "标记为已掌握") { store.toggleMastered(id: entry.id) }
+        Button("复制原文") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(entry.text, forType: .string)
+        }
+        Divider()
+        Button("删除", role: .destructive) { delete(entry) }
+    }
+
     private func contextSection(_ entry: VocabEntry) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Label("原句", systemImage: "text.quote")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                SectionLabel("原句")
                 Spacer()
                 if editingContext {
                     Button("取消") { editingContext = false }
@@ -179,7 +252,7 @@ struct VocabularyView: View {
                     .buttonStyle(.link)
                 }
             }
-            .font(.system(size: 11))
+            .font(Theme.caption)
 
             if editingContext {
                 TextField("粘贴这个词所在的句子", text: $contextDraft, axis: .vertical)
@@ -187,54 +260,23 @@ struct VocabularyView: View {
                     .lineLimit(2...6)
             } else if let context = entry.context {
                 Text(highlighted(context, term: entry.text))
-                    .font(.system(size: 14))
-                    .lineSpacing(3)
+                    .font(Theme.reading)
+                    .lineSpacing(4)
                     .textSelection(.enabled)
             } else {
-                Text("收藏时没有读取到原句，可以手动添加")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
-    }
-
-    private func row(_ entry: VocabEntry) -> some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(entry.text)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(2)
-                Text(entry.translation.replacingOccurrences(of: "\n", with: " "))
-                    .font(.system(size: 11))
+                Text("收藏时没有读取到原句，可以手动添加。")
+                    .font(Theme.body)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                if let context = entry.context {
-                    Text(highlighted(context, term: entry.text))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-            if entry.mastered {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
             }
         }
-        .padding(.vertical, 3)
+        .surface()
     }
 
-    @ViewBuilder
-    private func actions(for entry: VocabEntry) -> some View {
-        Button(entry.mastered ? "标记为未掌握" : "标记为已掌握") { store.toggleMastered(id: entry.id) }
-        Button("复制原文") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(entry.text, forType: .string)
-        }
-        Divider()
-        Button("删除", role: .destructive) { store.remove(id: entry.id) }
+    private func meta(_ entry: VocabEntry) -> MetaList {
+        var rows: [(label: String, value: String)] = []
+        if let origin = entry.origin { rows.append(("来源", displayOrigin(origin))) }
+        rows.append(("收藏于", entry.createdAt.formatted(date: .abbreviated, time: .shortened)))
+        return MetaList(rows: rows)
     }
 
     @ViewBuilder
@@ -242,18 +284,17 @@ struct VocabularyView: View {
         if let entry = store.entries.first(where: { $0.id == selection }) {
             VStack(alignment: .leading, spacing: 0) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: Theme.gapL) {
                         Text(entry.text)
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(Theme.title)
                             .textSelection(.enabled)
                         contextSection(entry)
-                        Text(entry.translation.isEmpty ? "（没有保存译文）" : entry.translation)
-                            .font(.system(size: 14))
+                        Text(entry.translation.isEmpty ? "没有保存译文。" : entry.translation)
+                            .font(Theme.body)
                             .lineSpacing(4)
+                            .foregroundStyle(entry.translation.isEmpty ? .secondary : .primary)
                             .textSelection(.enabled)
-                        Text((entry.origin.map { "来自 \($0) · " } ?? "") + "收藏于 \(entry.createdAt.formatted(date: .abbreviated, time: .shortened))")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+                        meta(entry)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(18)
@@ -262,16 +303,16 @@ struct VocabularyView: View {
                 HStack {
                     Button(entry.mastered ? "标记为未掌握" : "标记为已掌握") { store.toggleMastered(id: entry.id) }
                     Spacer()
-                    Button("删除", role: .destructive) {
-                        store.remove(id: entry.id)
-                        selection = nil
-                    }
+                    Button("删除", role: .destructive) { delete(entry) }
                 }
                 .padding(10)
             }
-        } else {
+        } else if !store.entries.isEmpty {
             Text("选择左侧的生词查看详情")
+                .font(Theme.body)
                 .foregroundStyle(.secondary)
+        } else {
+            Color.clear
         }
     }
 }

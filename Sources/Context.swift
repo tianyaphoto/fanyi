@@ -39,7 +39,7 @@ enum ContextReader {
         return clean(raw, term: term)
     }
 
-    /// 例如「预览 · paper.pdf」。
+    /// 例如「预览：paper.pdf」。
     static func originDescription() -> String? {
         guard let app = NSWorkspace.shared.frontmostApplication,
               app.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return nil }
@@ -57,7 +57,7 @@ enum ContextReader {
         }
         if title.count > 80 { title = String(title.prefix(80)) + "…" }
         if title.isEmpty || title == name { return name.isEmpty ? nil : name }
-        return name.isEmpty ? title : "\(name) · \(title)"
+        return name.isEmpty ? title : "\(name)：\(title)"
     }
 
     // MARK: - 普通文本控件（TextEdit、备忘录、Pages、预览等）
@@ -181,7 +181,7 @@ func highlighted(_ context: String, term: String) -> AttributedString {
     while searchStart < attributed.endIndex,
           let range = attributed[searchStart...].range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) {
         attributed[range].inlinePresentationIntent = .stronglyEmphasized
-        attributed[range].foregroundColor = .accentColor
+        attributed[range].foregroundColor = Theme.accent
         searchStart = range.upperBound
     }
     return attributed

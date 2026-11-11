@@ -66,8 +66,18 @@ final class HistoryStore {
         persist()
     }
 
-    func remove(id: HistoryEntry.ID) {
-        entries.removeAll { $0.id == id }
+    /// 删除一条，返回它原来的位置，供撤销时放回。
+    @discardableResult
+    func remove(id: HistoryEntry.ID) -> Int? {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return nil }
+        entries.remove(at: index)
+        persist()
+        return index
+    }
+
+    func restore(_ entry: HistoryEntry, at index: Int) {
+        guard !entries.contains(where: { $0.id == entry.id }) else { return }
+        entries.insert(entry, at: min(max(index, 0), entries.count))
         persist()
     }
 
@@ -88,6 +98,7 @@ struct HistoryView: View {
     @State private var query = ""
     @State private var selection: HistoryEntry.ID?
     @State private var confirmClear = false
+    @State private var removed: (entry: HistoryEntry, index: Int)?
 
     private var filtered: [HistoryEntry] {
         guard !query.isEmpty else { return store.entries }
@@ -103,11 +114,20 @@ struct HistoryView: View {
                     .textFieldStyle(.roundedBorder)
                     .padding(10)
 
-                if filtered.isEmpty {
-                    Spacer()
-                    Text(store.entries.isEmpty ? (Settings.historyEnabled ? "还没有查词记录" : "查词历史已关闭，可在设置中开启") : "没有符合条件的记录")
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                if store.entries.isEmpty {
+                    if Settings.historyEnabled {
+                        EmptyState(title: "还没有查词记录",
+                                   detail: "每次查词都会记在这里。同一个词查了几次会标出来，方便发现该收藏的生词。",
+                                   actionTitle: "输入翻译") { Coordinator.shared.showInput() }
+                    } else {
+                        EmptyState(title: "查词历史已关闭",
+                                   detail: "打开后，查过的词和重复查询的次数会记在这里，只保存在本机。",
+                                   actionTitle: "打开设置") { Windows.showSettings() }
+                    }
+                } else if filtered.isEmpty {
+                    EmptyState(title: "没有符合条件的记录",
+                               detail: "换一个关键词再试。",
+                               actionTitle: "清除搜索") { query = "" }
                 } else {
                     List(filtered, selection: $selection) { entry in
                         row(entry)
@@ -117,16 +137,29 @@ struct HistoryView: View {
                 }
 
                 Divider()
-                HStack {
-                    Text("共 \(store.entries.count) 条")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("清空历史…") { confirmClear = true }
-                        .controlSize(.small)
-                        .disabled(store.entries.isEmpty)
+                if let removed {
+                    UndoBar(message: "已删除「\(removed.entry.text)」") {
+                        store.restore(removed.entry, at: removed.index)
+                        selection = removed.entry.id
+                        self.removed = nil
+                    }
+                    .task(id: removed.entry.id) {
+                        try? await Task.sleep(for: .seconds(8))
+                        if !Task.isCancelled { self.removed = nil }
+                    }
+                } else {
+                    HStack {
+                        Text("共 \(store.entries.count) 条")
+                            .font(Theme.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("清空历史…") { confirmClear = true }
+                            .controlSize(.small)
+                            .disabled(store.entries.isEmpty)
+                    }
+                    .padding(6)
                 }
-                .padding(6)
             }
             .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
 
@@ -138,25 +171,35 @@ struct HistoryView: View {
             Button("清空", role: .destructive) {
                 store.clear()
                 selection = nil
+                removed = nil
             }
         } message: {
             Text("生词本不受影响。此操作无法撤销。")
         }
     }
 
+    private func delete(_ entry: HistoryEntry) {
+        guard let index = store.remove(id: entry.id) else { return }
+        if selection == entry.id { selection = nil }
+        removed = (entry, index)
+    }
+
     private func row(_ entry: HistoryEntry) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.gapS) {
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
+                HStack(spacing: Theme.gapXS) {
                     Text(entry.text)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Theme.bodyStrong)
                         .lineLimit(1)
                     if vocabulary.contains(entry.text) {
-                        Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(.yellow)
+                        Image(systemName: "star.fill")
+                            .font(Theme.caption)
+                            .foregroundStyle(Theme.favorite)
+                            .accessibilityLabel("已在生词本中")
                     }
                 }
                 Text(entry.translation.replacingOccurrences(of: "\n", with: " "))
-                    .font(.system(size: 11))
+                    .font(Theme.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -164,14 +207,15 @@ struct HistoryView: View {
             VStack(alignment: .trailing, spacing: 3) {
                 if entry.count > 1 {
                     Text("\(entry.count) 次")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(Theme.captionStrong)
+                        .monospacedDigit()
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(Capsule().fill(entry.count >= 3 ? Color.orange.opacity(0.25) : Color.secondary.opacity(0.15)))
+                        .background(Capsule().fill(entry.count >= 3 ? Theme.repeated.opacity(0.25) : Theme.surface))
                 }
                 Text(entry.lastAt, format: .relative(presentation: .named))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                    .font(Theme.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 3)
@@ -185,7 +229,7 @@ struct HistoryView: View {
             NSPasteboard.general.setString(entry.text, forType: .string)
         }
         Divider()
-        Button("删除", role: .destructive) { store.remove(id: entry.id) }
+        Button("删除", role: .destructive) { delete(entry) }
     }
 
     private func favoriteButton(_ entry: HistoryEntry) -> some View {
@@ -199,36 +243,41 @@ struct HistoryView: View {
         }
     }
 
+    private func meta(_ entry: HistoryEntry) -> MetaList {
+        var rows: [(label: String, value: String)] = [("查询次数", "\(entry.count) 次")]
+        if entry.count > 1 {
+            rows.append(("首次查询", entry.firstAt.formatted(date: .abbreviated, time: .shortened)))
+        }
+        rows.append(("最近查询", entry.lastAt.formatted(date: .abbreviated, time: .shortened)))
+        if let origin = entry.origin { rows.append(("来源", displayOrigin(origin))) }
+        return MetaList(rows: rows)
+    }
+
     @ViewBuilder
     private var detail: some View {
         if let entry = store.entries.first(where: { $0.id == selection }) {
             VStack(alignment: .leading, spacing: 0) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: Theme.gapL) {
                         Text(entry.text)
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(Theme.title)
                             .textSelection(.enabled)
                         if let context = entry.context {
-                            Text(highlighted(context, term: entry.text))
-                                .font(.system(size: 13))
-                                .lineSpacing(3)
-                                .textSelection(.enabled)
-                                .padding(10)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+                            VStack(alignment: .leading, spacing: 6) {
+                                SectionLabel("原句")
+                                Text(highlighted(context, term: entry.text))
+                                    .font(Theme.reading)
+                                    .lineSpacing(4)
+                                    .textSelection(.enabled)
+                            }
+                            .surface()
                         }
-                        Text(entry.translation.isEmpty ? "（没有保存译文）" : entry.translation)
-                            .font(.system(size: 14))
+                        Text(entry.translation.isEmpty ? "没有保存译文。" : entry.translation)
+                            .font(Theme.body)
                             .lineSpacing(4)
+                            .foregroundStyle(entry.translation.isEmpty ? .secondary : .primary)
                             .textSelection(.enabled)
-                        if let origin = entry.origin {
-                            Text("来源：\(origin)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Text("共查询 \(entry.count) 次 · 首次 \(entry.firstAt.formatted(date: .abbreviated, time: .shortened)) · 最近 \(entry.lastAt.formatted(date: .abbreviated, time: .shortened))")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+                        meta(entry)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(18)
@@ -237,16 +286,16 @@ struct HistoryView: View {
                 HStack {
                     favoriteButton(entry)
                     Spacer()
-                    Button("删除", role: .destructive) {
-                        store.remove(id: entry.id)
-                        selection = nil
-                    }
+                    Button("删除", role: .destructive) { delete(entry) }
                 }
                 .padding(10)
             }
-        } else {
+        } else if !store.entries.isEmpty {
             Text("选择左侧的记录查看详情")
+                .font(Theme.body)
                 .foregroundStyle(.secondary)
+        } else {
+            Color.clear
         }
     }
 }
