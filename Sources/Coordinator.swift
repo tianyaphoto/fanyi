@@ -14,6 +14,10 @@ final class Coordinator {
     private var capturing = false
 
     func start() {
+        if let url = EvalMode.casesURL {
+            EvalMode.run(url)
+            return
+        }
         if let dir = DemoMode.directory {
             DemoMode.run(in: dir, popup: popup)
             return
@@ -241,10 +245,16 @@ final class IconPanelController {
 
 // MARK: - 翻译浮窗
 
+/// 无边框浮窗：没有系统标题栏（标题栏会吃掉顶部按钮的点击，还会露出红黄绿三个按钮），圆角和阴影自己画。
 private final class PopupPanel: NSPanel {
     var onEscape: (() -> Void)?
     override var canBecomeKey: Bool { true }
     override func cancelOperation(_ sender: Any?) { onEscape?() }
+}
+
+/// 浮窗不是当前窗口时，第一次点击也直接交给按钮，而不是只用来激活窗口。
+private final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 @MainActor
@@ -343,10 +353,11 @@ final class PopupController {
 
     private func makePanel() -> PopupPanel {
         let panel = PopupPanel(contentRect: NSRect(origin: .zero, size: compactSize),
-                               styleMask: [.titled, .fullSizeContentView, .resizable, .nonactivatingPanel],
+                               styleMask: [.borderless, .resizable, .nonactivatingPanel],
                                backing: .buffered, defer: false)
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.hidesOnDeactivate = false
@@ -355,12 +366,18 @@ final class PopupController {
         panel.minSize = NSSize(width: 320, height: 180)
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.onEscape = { [weak self] in self?.close() }
-        let host = NSHostingView(rootView: TranslationView(model: model, onClose: { [weak self] in self?.close() }))
+        let root = TranslationView(model: model, onClose: { [weak self] in self?.close() })
+            .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5))
+        let host = FirstClickHostingView(rootView: root)
         host.sizingOptions = []
         panel.contentView = host
         panel.setContentSize(compactSize)
         return panel
     }
+
+    private static let cornerRadius: CGFloat = 12
 }
 
 extension PopupController {
@@ -386,8 +403,23 @@ extension PopupController {
         }
     }
 
+    /// 模拟在固定按钮的位置按下、松开鼠标（走窗口正常的事件分发，标题栏会不会吃掉点击也能测出来）。
+    func clickPinForTesting() {
+        guard let panel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible && $0.frame.width > 100 }) else { return }
+        // 固定按钮在关闭按钮左边：右边距 8 + 一个按钮宽 26 + 半个按钮宽 13；纵向在顶部 10 + 按钮高的一半 12
+        let point = NSPoint(x: panel.frame.width - 8 - 26 - 13, y: panel.frame.height - 10 - 12)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            if let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                              windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                panel.sendEvent(event)
+            }
+        }
+    }
+
     func snapshot(to url: URL) {
-        guard let view = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible && $0.frame.width > 100 })?.contentView,
+        // 连窗口边框一起截（标题栏按钮在 contentView 的上一层）
+        guard let window = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible && $0.frame.width > 100 }),
+              let view = window.contentView?.superview ?? window.contentView,
               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?.write(to: url)

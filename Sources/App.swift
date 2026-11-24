@@ -3,10 +3,14 @@ import AppKit
 
 @main
 struct FanyiApp: App {
+    static let isDevRun = ProcessInfo.processInfo.environment["FANYI_EVAL"] != nil
+        || ProcessInfo.processInfo.environment["FANYI_DEMO_DIR"] != nil
+
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        MenuBarExtra("翻译神器", systemImage: "character.bubble") {
+        // 评测、演示截图模式（开发用）不在菜单栏放图标，免得和正在用的 App 并排出现两个
+        MenuBarExtra("翻译神器", systemImage: "character.bubble", isInserted: .constant(!Self.isDevRun)) {
             MenuContent()
         }
     }
@@ -38,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Settings.registerDefaults()
         ensureEditMenu()
         Coordinator.shared.start()
-        if !Settings.provider.isConfigured {
+        if !Settings.provider.isConfigured && !FanyiApp.isDevRun {
             Windows.showSettings()
         }
     }

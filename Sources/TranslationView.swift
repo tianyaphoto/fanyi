@@ -25,6 +25,10 @@ final class TranslationModel {
     var scene: TranslationScene = TranslationScene.defaults[0]
     /// 本次参考的术语和资料片段
     var retrieval: Retrieval = .empty
+    /// 第几次翻译（第一次的输出不像译文时会自动重翻）
+    var attempt = 1
+    /// 两次都没通过检查时的问题说明
+    var qualityWarning: String?
 
     /// 输入翻译模式：浮窗顶部显示输入框。
     var inputMode = false
@@ -85,6 +89,8 @@ final class TranslationModel {
         sourceInfo = capture.source
         scene = sceneID.map { SceneStore.shared.scene(id: $0) } ?? SceneStore.shared.detect(for: capture.source)
         retrieval = text.isEmpty ? .empty : KnowledgeStore.shared.retrieve(text: text, context: capture.context, sceneID: scene.id)
+        attempt = 1
+        qualityWarning = nil
         result = ""
         errorMessage = nil
         needsAPIKey = false
@@ -99,11 +105,17 @@ final class TranslationModel {
         isLoading = true
         task = Task {
             do {
-                for try await chunk in Translator.stream(text: text, context: context, image: capture.image,
-                                                         scene: scene, retrieval: retrieval) {
-                    result += chunk
+                let outcome = try await Translator.translate(
+                    text: text, context: context, image: capture.image, scene: scene, retrieval: retrieval
+                ) { [weak self] partial, attempt in
+                    guard let self, !Task.isCancelled else { return }
+                    // 第二次开始时清空第一次的输出，并说明为什么重翻
+                    if attempt > self.attempt { self.attempt = attempt }
+                    self.result = partial
                 }
                 if Task.isCancelled { return }
+                result = outcome.text
+                qualityWarning = outcome.problems.isEmpty ? nil : outcome.problems.joined(separator: "；")
                 HistoryStore.shared.updateTranslation(text, translation: result)
                 if isFavorited { saveToVocabulary() }
             } catch {
@@ -144,6 +156,8 @@ final class TranslationModel {
         origin = nil
         sourceInfo = nil
         retrieval = .empty
+        attempt = 1
+        qualityWarning = nil
         result = ""
         localDefinition = nil
         errorMessage = nil
@@ -279,7 +293,6 @@ struct TranslationView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(.regularMaterial)
-        .ignoresSafeArea()
         .onChange(of: model.source) {
             showFullLocal = false
             showFullSource = false
@@ -584,6 +597,21 @@ struct TranslationView: View {
             VStack(alignment: .leading, spacing: 6) {
                 if model.localDefinition != nil {
                     SectionLabel("AI 释义")
+                }
+                if model.attempt > 1 && model.isLoading {
+                    Label("第一次的输出不像译文，正在重新翻译…", systemImage: "arrow.triangle.2.circlepath")
+                        .font(Theme.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let warning = model.qualityWarning, !model.isLoading {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.repeated)
+                        Text("这段译文可能不准确：\(warning)。可以点「重试」，或在设置里换一个更强的模型。")
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("重试") { model.retry() }
+                            .buttonStyle(.link)
+                    }
+                    .font(Theme.caption)
                 }
                 if canShowBilingual {
                     bilingualList

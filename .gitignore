@@ -3,3 +3,4 @@ Fanyi.xcodeproj/
 Info.plist
 .DS_Store
 dist/
+tests/eval-results.json

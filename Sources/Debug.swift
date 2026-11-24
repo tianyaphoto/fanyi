@@ -21,10 +21,27 @@ enum DemoMode {
         let capture = Capture(text: read("source.txt") ?? "", context: read("context.txt"),
                               source: read("origin.txt").map { SourceInfo(appName: $0) })
         let screen = NSScreen.main?.visibleFrame ?? .zero
+        // FANYI_DEMO_INPUT=1：截输入翻译的空窗口
+        if ProcessInfo.processInfo.environment["FANYI_DEMO_INPUT"] != nil {
+            popup.showInput()
+            finish(dir: dir, popup: popup)
+            return
+        }
         popup.showDemo(capture, result: read("result.txt") ?? "", sceneID: read("scene.txt"),
                        near: NSPoint(x: screen.midX - 200, y: screen.midY + 200))
+        finish(dir: dir, popup: popup)
+    }
+
+    /// 等界面画好；FANYI_DEMO_CLICK=pin 时先模拟点一下固定按钮并打印结果；然后截图退出。
+    private static func finish(dir: URL, popup: PopupController) {
         Task {
-            try? await Task.sleep(for: .milliseconds(1500))
+            try? await Task.sleep(for: .milliseconds(1200))
+            if ProcessInfo.processInfo.environment["FANYI_DEMO_CLICK"] == "pin" {
+                let before = popup.model.pinned
+                popup.clickPinForTesting()
+                try? await Task.sleep(for: .milliseconds(300))
+                print("pin: \(before) -> \(popup.model.pinned)")
+            }
             popup.snapshot(to: dir.appendingPathComponent("snapshot.png"))
             NSApp.terminate(nil)
         }

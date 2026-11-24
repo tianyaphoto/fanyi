@@ -1,0 +1,5 @@
+[
+ {"text": "regression", "target": "zh", "must": ["回归"], "forbid": []},
+ {"text": "take off", "target": "zh", "must": ["起飞|脱"], "forbid": []},
+ {"text": "灰度发布", "target": "mixed", "must": ["canary|gray|grey|rollout|release"], "forbid": []}
+]
