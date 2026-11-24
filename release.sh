@@ -65,5 +65,5 @@ spctl --assess --type execute --verbose=2 "$APP"
 
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT/Fanyi.zip"
 VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP/Contents/Info.plist")
-echo "完成：$OUT/Fanyi.zip（版本 $VERSION）"
+echo "完成：$OUT/Fanyi.zip（版本 ${VERSION}）"
 shasum -a 256 "$OUT/Fanyi.zip"

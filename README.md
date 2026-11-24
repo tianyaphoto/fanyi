@@ -44,14 +44,13 @@
 
 到 [Releases](https://github.com/tianyaphoto/fanyi/releases/latest) 下载 `Fanyi.zip`，解压后把 `Fanyi.app` 拖进「应用程序」文件夹。支持 Apple 芯片和 Intel 芯片的 Mac。
 
-这个 App 没有经过苹果公证，第一次打开时系统会拦下。处理方法（二选一）：
-
-- 在「应用程序」里右键点 Fanyi →「打开」→ 再点「打开」；如果没有这个按钮，去 系统设置 → 隐私与安全性，在页面下方点「仍要打开」。
-- 或者在终端运行：`xattr -dr com.apple.quarantine /Applications/Fanyi.app`
+App 使用 Developer ID 签名并通过了苹果公证，双击即可打开。
 
 项目主页：<https://tianyaphoto.github.io/fanyi/>
 
 ## 从源码编译
+
+发布版用 `TEAM_ID=<你的 Team ID> ./release.sh` 打包：归档、Developer ID 签名、提交公证、钉上公证票据，输出 `dist/Fanyi.zip`（需要 Developer ID Application 证书和 App Store Connect API 密钥，见脚本开头的说明）。自己用的话按下面编译即可。
 
 ```bash
 brew install xcodegen
