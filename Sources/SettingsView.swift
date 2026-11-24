@@ -5,6 +5,7 @@ struct SettingsView: View {
     @AppStorage(Settings.providerKey) private var provider = Provider.claude
     @AppStorage(Settings.selectionIconKey) private var selectionIcon = true
     @AppStorage(Settings.copyFallbackKey) private var copyFallback = true
+    @AppStorage(Settings.enhancedAccessibilityKey) private var enhancedAccessibility = true
     @AppStorage(Settings.historyEnabledKey) private var historyEnabled = true
     @AppStorage(Settings.screenshotVisionKey) private var screenshotVision = false
 
@@ -66,10 +67,24 @@ struct SettingsView: View {
 
             Section("划词翻译") {
                 Toggle("选中文字后显示翻译小图标", isOn: $selectionIcon)
-                Toggle("兼容模式：读取不到选中文字时模拟 ⌘C", isOn: $copyFallback)
-                Text("兼容模式用于 Chrome、VS Code 等应用，取词后会自动恢复剪贴板。")
+                Toggle("增强取词：直接读取 Chrome、VS Code 等应用里的文字", isOn: $enhancedAccessibility)
+                Text("这类应用默认不提供文字内容。打开后会让它们开启辅助功能支持，这样不经过剪贴板也能取词，还能读到原句。它们可能因此略微变慢；如果窗口管理工具的动画变得异常，请关闭这一项并重启对应的应用。Google 文档的正文画在画布上，读不到，会自动改用拷贝取词（需要打开下面的兼容模式）。")
                     .font(Theme.caption)
                     .foregroundStyle(.secondary)
+                Toggle("兼容模式：读取不到选中文字时执行一次拷贝", isOn: $copyFallback)
+                Text("优先触发应用的「拷贝」菜单项，没有时模拟 ⌘C，取词后会自动恢复剪贴板。")
+                    .font(Theme.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("场景与资料库") {
+                HStack {
+                    Text("按来源自动选翻译场景（文档、技术、学术、邮件与聊天……），并参考你的资料库和术语表。")
+                        .font(Theme.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("打开…") { Windows.showLibrary() }
+                }
             }
 
             Section("截图翻译") {

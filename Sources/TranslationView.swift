@@ -19,6 +19,12 @@ final class TranslationModel {
     var lookupCount = 0
     /// 看图翻译：截图本身发给了模型，source 是本地 OCR 的文字（可能为空）。
     var fromImage = false
+    /// 来源信息（App、窗口标题、网址），用于选场景和「以后这里都用这个场景」
+    var sourceInfo: SourceInfo?
+    /// 本次使用的翻译场景
+    var scene: TranslationScene = TranslationScene.defaults[0]
+    /// 本次参考的术语和资料片段
+    var retrieval: Retrieval = .empty
 
     /// 输入翻译模式：浮窗顶部显示输入框。
     var inputMode = false
@@ -50,10 +56,24 @@ final class TranslationModel {
     }
 
     func retry() {
-        if let lastCapture { translate(lastCapture, isRetry: true) }
+        if let lastCapture { translate(lastCapture, isRetry: true, sceneID: scene.id) }
     }
 
-    func translate(_ capture: Capture, isRetry: Bool = false) {
+    /// 换一个场景重新翻译（不算新的查询）。
+    func changeScene(_ id: String) {
+        guard let lastCapture, id != scene.id || errorMessage != nil else { return }
+        translate(lastCapture, isRetry: true, sceneID: id)
+    }
+
+    /// 「以后这里都用这个场景」可以记住的关键词（网站域名或 App）。
+    var rememberKeyword: String? { sourceInfo.flatMap(SceneStore.rememberKeyword(for:)) }
+
+    func rememberScene() {
+        if let sourceInfo { SceneStore.shared.remember(sourceInfo, as: scene.id) }
+    }
+
+    /// - Parameter sceneID: 指定场景；为 nil 时按来源自动选择。
+    func translate(_ capture: Capture, isRetry: Bool = false, sceneID: String? = nil) {
         let text = capture.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || capture.image != nil else { return }
         cancel()
@@ -62,6 +82,9 @@ final class TranslationModel {
         source = text
         context = capture.context
         origin = capture.origin
+        sourceInfo = capture.source
+        scene = sceneID.map { SceneStore.shared.scene(id: $0) } ?? SceneStore.shared.detect(for: capture.source)
+        retrieval = text.isEmpty ? .empty : KnowledgeStore.shared.retrieve(text: text, context: capture.context, sceneID: scene.id)
         result = ""
         errorMessage = nil
         needsAPIKey = false
@@ -76,7 +99,8 @@ final class TranslationModel {
         isLoading = true
         task = Task {
             do {
-                for try await chunk in Translator.stream(text: text, context: context, image: capture.image) {
+                for try await chunk in Translator.stream(text: text, context: context, image: capture.image,
+                                                         scene: scene, retrieval: retrieval) {
                     result += chunk
                 }
                 if Task.isCancelled { return }
@@ -118,6 +142,8 @@ final class TranslationModel {
         fromImage = false
         context = nil
         origin = nil
+        sourceInfo = nil
+        retrieval = .empty
         result = ""
         localDefinition = nil
         errorMessage = nil
@@ -188,12 +214,32 @@ private final class SpeechDelegate: NSObject, AVSpeechSynthesizerDelegate, @unch
     }
 }
 
+
+extension TranslationModel {
+    /// 整段、多段的长文本：浮窗开大一些，原文收进正文区。
+    static func isLong(_ text: String) -> Bool { text.count > 200 || text.contains("\n") }
+
+    var isLong: Bool { Self.isLong(source) }
+}
+
+/// 按行拆开，空行保留为段落间距。长译文拆成多个 Text，避免一整块大文本在流式刷新时重绘出错。
+private func lines(_ text: String) -> [String] {
+    text.components(separatedBy: "\n")
+}
+
+private func paragraphs(_ text: String) -> [String] {
+    text.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+}
+
 struct TranslationView: View {
     @Bindable var model: TranslationModel
     var onClose: () -> Void
 
     @FocusState private var inputFocused: Bool
     @State private var showFullLocal = false
+    @State private var showFullSource = false
+    @State private var showReferences = false
+    @State private var bilingual = false
     @State private var copied = false
     @State private var copyTick = 0
     @State private var favoriteBounce = 0
@@ -202,12 +248,18 @@ struct TranslationView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            if showMetaBar {
+                metaBar
+            }
             if model.lookupCount >= 2 {
                 repeatHint
             }
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.gapM) {
+                    if model.isLong && !canShowBilingual {
+                        sourceSection
+                    }
                     if let local = model.localDefinition {
                         localSection(local)
                     }
@@ -222,6 +274,7 @@ struct TranslationView: View {
                     }
                 }
                 .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -229,6 +282,8 @@ struct TranslationView: View {
         .ignoresSafeArea()
         .onChange(of: model.source) {
             showFullLocal = false
+            showFullSource = false
+            showReferences = false
             copied = false
         }
         .task(id: copyTick) {
@@ -246,7 +301,7 @@ struct TranslationView: View {
 
     // MARK: 顶部
 
-    /// 查的是单词或短语时，把它当标题显示；整句、整段则缩成几行小字。
+    /// 查的是单词或短语时，把它当标题显示；整句、整段则缩成一行小字，全文放进正文区。
     private var isTerm: Bool {
         !model.source.isEmpty && model.source.count <= 40 && !model.source.contains("\n")
     }
@@ -269,13 +324,23 @@ struct TranslationView: View {
                         Text(model.source)
                             .font(Theme.heading)
                             .lineLimit(2)
-                            .textSelection(.enabled)
+                    } else if model.isLong {
+                        // 长文本：标题只放第一行和字数，全文在下面的「原文」里
+                        Text(paragraphs(model.source).first ?? model.source)
+                            .font(Theme.body)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .padding(.top, 3)
+                        Text("共 \(model.source.count) 字 · \(paragraphs(model.source).count) 段")
+                            .font(Theme.caption)
+                            .foregroundStyle(.tertiary)
+                            .monospacedDigit()
                     } else {
                         Text(model.source.isEmpty ? (model.fromImage ? "截图（看图翻译）" : "翻译神器") : model.source)
                             .font(Theme.body)
                             .foregroundStyle(.secondary)
                             .lineLimit(3)
-                            .textSelection(.enabled)
                             .padding(.top, 3)
                     }
                     if let context = model.context {
@@ -287,6 +352,7 @@ struct TranslationView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack(spacing: 0) {
@@ -314,6 +380,7 @@ struct TranslationView: View {
                            tint: model.pinned ? Theme.accent : nil) { model.pinned.toggle() }
                 IconButton(symbol: "xmark", help: "关闭（Esc）") { onClose() }
             }
+            .fixedSize()
         }
         .padding(.leading, 14)
         .padding(.trailing, 8)
@@ -344,7 +411,143 @@ struct TranslationView: View {
         model.toggleFavorite()
     }
 
+    // MARK: 场景、参考资料、来源
+
+    private var showMetaBar: Bool {
+        !model.source.isEmpty || model.fromImage
+    }
+
+    private var metaBar: some View {
+        HStack(spacing: Theme.gapS) {
+            sceneMenu
+            if !model.retrieval.isEmpty {
+                Button { showReferences.toggle() } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "books.vertical")
+                        Text("参考 \(model.retrieval.glossary.count + model.retrieval.passages.count)")
+                    }
+                }
+                .buttonStyle(ChipStyle())
+                .help("这次翻译参考了术语表和资料库")
+                .popover(isPresented: $showReferences, arrowEdge: .bottom) { referenceList }
+            }
+            if bilingualAvailable {
+                Button { withAnimation(reduceMotion ? nil : Theme.quick) { bilingual.toggle() } } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "text.alignleft")
+                        Text("对照")
+                    }
+                }
+                .buttonStyle(ChipStyle(active: bilingual))
+                .help("原文和译文逐段对照")
+            }
+            Spacer(minLength: 0)
+            if let origin = model.origin {
+                Text(displayOrigin(origin))
+                    .font(Theme.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(displayOrigin(origin))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
+    }
+
+    private var sceneMenu: some View {
+        Menu {
+            Section("翻译场景") {
+                ForEach(SceneStore.shared.scenes) { scene in
+                    Button {
+                        model.changeScene(scene.id)
+                    } label: {
+                        if scene.id == model.scene.id {
+                            Label(scene.name, systemImage: "checkmark")
+                        } else {
+                            Text(scene.name)
+                        }
+                    }
+                }
+            }
+            if let keyword = model.rememberKeyword {
+                Divider()
+                Button("以后「\(keyword)」都用「\(model.scene.name)」") { model.rememberScene() }
+            }
+            Divider()
+            Button("管理场景和资料库…") {
+                Windows.showLibrary()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "theatermasks")
+                Text(model.scene.name)
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
+            }
+        }
+        .menuStyle(.button)
+        .buttonStyle(ChipStyle())
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("翻译场景：不同场景用不同的翻译要求，换一个会重新翻译")
+    }
+
+    private var referenceList: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.gapM) {
+                if !model.retrieval.glossary.isEmpty {
+                    VStack(alignment: .leading, spacing: Theme.gapXS) {
+                        SectionLabel("术语表")
+                        ForEach(model.retrieval.glossary, id: \.self) { entry in
+                            Text("\(entry.source) = \(entry.target)")
+                                .font(Theme.body)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+                ForEach(model.retrieval.passages) { passage in
+                    VStack(alignment: .leading, spacing: Theme.gapXS) {
+                        SectionLabel(passage.docName)
+                        Text(passage.text)
+                            .font(Theme.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(8)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(Theme.gapM)
+            .frame(width: 360, alignment: .leading)
+        }
+        .frame(maxHeight: 320)
+    }
+
     // MARK: 内容
+
+    /// 长文本的原文：默认收起成三行，展开后可选中。
+    private var sourceSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                SectionLabel("原文")
+                Spacer()
+                Button(showFullSource ? "收起" : "展开") {
+                    withAnimation(reduceMotion ? nil : Theme.expand) { showFullSource.toggle() }
+                }
+                .buttonStyle(.link)
+                .font(Theme.caption)
+            }
+            if showFullSource {
+                LineStack(text: model.source, font: Theme.body, color: .secondary)
+            } else {
+                Text(paragraphs(model.source).joined(separator: " "))
+                    .font(Theme.body)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .surface()
+    }
 
     private func localSection(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -366,6 +569,15 @@ struct TranslationView: View {
         .surface()
     }
 
+    /// 原文、译文段数一致时才能逐段对照（翻译完成后）。
+    private var bilingualAvailable: Bool {
+        guard model.isLong, !model.isLoading, !model.result.isEmpty else { return false }
+        let count = paragraphs(model.source).count
+        return count > 1 && count == paragraphs(model.result).count
+    }
+
+    private var canShowBilingual: Bool { bilingual && bilingualAvailable }
+
     @ViewBuilder
     private var aiSection: some View {
         if !model.result.isEmpty || model.isLoading {
@@ -373,16 +585,38 @@ struct TranslationView: View {
                 if model.localDefinition != nil {
                     SectionLabel("AI 释义")
                 }
-                if !model.result.isEmpty {
-                    Text(model.result)
-                        // 单词释义条目多，用正文字号；整句译文用大一号方便阅读
-                        .font(isTerm ? Theme.body : Theme.reading)
-                        .lineSpacing(4)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                if canShowBilingual {
+                    bilingualList
+                } else if !model.result.isEmpty {
+                    // 单词释义条目多，用正文字号；整句译文用大一号方便阅读
+                    LineStack(text: model.result, font: isTerm ? Theme.body : Theme.reading, color: .primary)
+                    if model.isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                            .padding(.top, 2)
+                    }
                 } else {
                     SkeletonLines()
                         .padding(.top, 2)
+                }
+            }
+        }
+    }
+
+    private var bilingualList: some View {
+        LazyVStack(alignment: .leading, spacing: Theme.gapM) {
+            ForEach(Array(zip(paragraphs(model.source), paragraphs(model.result)).enumerated()), id: \.offset) { _, pair in
+                VStack(alignment: .leading, spacing: Theme.gapXS) {
+                    Text(pair.0)
+                        .font(Theme.body)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(pair.1)
+                        .font(Theme.reading)
+                        .lineSpacing(4)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -399,6 +633,7 @@ struct TranslationView: View {
                 }
                 Text(message)
                     .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .font(Theme.body)
             if model.canRetry {
@@ -414,5 +649,48 @@ struct TranslationView: View {
                 .controlSize(.small)
             }
         }
+    }
+}
+
+/// 多行文字逐行渲染（空行变成段落间距），每行可选中。
+private struct LineStack: View {
+    let text: String
+    let font: Font
+    let color: Color
+
+    var body: some View {
+        LazyVStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(lines(text).enumerated()), id: \.offset) { _, line in
+                if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Color.clear.frame(height: 6)
+                } else {
+                    Text(line)
+                        .font(font)
+                        .foregroundStyle(color)
+                        .lineSpacing(4)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+}
+
+/// 浮窗里的小标签按钮：场景、参考、对照。
+struct ChipStyle: ButtonStyle {
+    var active = false
+    @State private var hovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(Theme.caption)
+            .foregroundStyle(active ? Theme.accent : Color.secondary)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(active ? Theme.accent.opacity(0.15) : (hovering ? Theme.hover : Theme.surface)))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .onHover { hovering = $0 }
+            .contentShape(Capsule())
     }
 }

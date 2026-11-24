@@ -22,6 +22,7 @@ private struct MenuContent: View {
         Divider()
         Button("生词本") { Windows.showVocabulary() }
         Button("查词历史") { Windows.showHistory() }
+        Button("场景与资料库…") { Windows.showLibrary() }
         Button("设置…") { Windows.showSettings() }
         Divider()
         Button("退出") { NSApp.terminate(nil) }
@@ -74,6 +75,12 @@ enum Windows {
     static func showHistory() {
         show(id: "history", title: "查词历史", size: NSSize(width: 780, height: 520), resizable: true) {
             HistoryView()
+        }
+    }
+
+    static func showLibrary() {
+        show(id: "library", title: "场景与资料库", size: NSSize(width: 820, height: 580), resizable: true) {
+            LibraryView()
         }
     }
 

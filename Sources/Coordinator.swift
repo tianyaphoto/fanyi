@@ -14,6 +14,10 @@ final class Coordinator {
     private var capturing = false
 
     func start() {
+        if let dir = DemoMode.directory {
+            DemoMode.run(in: dir, popup: popup)
+            return
+        }
         if !AXIsProcessTrusted() {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             AXIsProcessTrustedWithOptions(options)
@@ -81,7 +85,8 @@ final class Coordinator {
             return
         }
 
-        let origin = ContextReader.originDescription()
+        var source = ContextReader.sourceInfo()
+        source?.suffix = "（截图）"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("fanyi-\(UUID().uuidString).png")
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
@@ -99,7 +104,7 @@ final class Coordinator {
                     if shot.text.isEmpty && shot.image == nil {
                         coordinator.popup.showMessage("截图中没有识别到文字。", near: point)
                     } else {
-                        coordinator.popup.show(Capture(text: shot.text, origin: origin.map { "\($0)（截图）" } ?? "截图",
+                        coordinator.popup.show(Capture(text: shot.text, source: source ?? SourceInfo(suffix: "（截图）"),
                                                        image: shot.image), near: point)
                     }
                 }
@@ -246,16 +251,19 @@ private final class PopupPanel: NSPanel {
 final class PopupController {
     let model = TranslationModel()
     private var panel: PopupPanel?
-    private let size = NSSize(width: 420, height: 300)
+    /// 单词、短句的浮窗大小
+    private let compactSize = NSSize(width: 420, height: 300)
+    /// 整段、多段长文本的浮窗大小（会按屏幕缩小）
+    private let largeSize = NSSize(width: 580, height: 560)
 
     func show(_ capture: Capture, near point: NSPoint) {
-        present(near: point)
+        present(near: point, anchor: capture.anchor, large: TranslationModel.isLong(capture.text))
         model.inputMode = false
         model.translate(capture)
     }
 
     func showMessage(_ message: String, near point: NSPoint) {
-        present(near: point)
+        present(near: point, anchor: nil, large: false)
         model.showMessage(message)
     }
 
@@ -267,9 +275,10 @@ final class PopupController {
             let mouse = NSEvent.mouseLocation
             if let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main {
                 let visible = screen.visibleFrame
-                let origin = NSPoint(x: visible.midX - panel.frame.width / 2,
-                                     y: visible.maxY - visible.height * 0.22 - panel.frame.height)
-                panel.setFrameOrigin(origin)
+                let size = compactSize
+                let origin = NSPoint(x: visible.midX - size.width / 2,
+                                     y: visible.maxY - visible.height * 0.22 - size.height)
+                panel.setFrame(NSRect(origin: origin, size: size), display: true)
             }
         }
         model.startInput()
@@ -286,24 +295,54 @@ final class PopupController {
         panel?.orderOut(nil)
     }
 
-    private func present(near point: NSPoint) {
+    private func present(near point: NSPoint, anchor: NSRect?, large: Bool) {
         let panel = self.panel ?? makePanel()
         self.panel = panel
         if !(panel.isVisible && model.pinned) {
-            var origin = NSPoint(x: point.x, y: point.y - panel.frame.height - 8)
-            if let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main {
-                let visible = screen.visibleFrame
-                if origin.y < visible.minY { origin.y = point.y + 30 } // 下方放不下就放到上方
-                origin.x = min(max(origin.x, visible.minX + 8), visible.maxX - panel.frame.width - 8)
-                origin.y = min(max(origin.y, visible.minY + 8), visible.maxY - panel.frame.height - 8)
-            }
-            panel.setFrameOrigin(origin)
+            let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main
+            let visible = (screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)).insetBy(dx: 8, dy: 8)
+            var size = large ? largeSize : compactSize
+            size.width = min(size.width, visible.width)
+            size.height = min(size.height, visible.height * 0.75)
+            panel.setFrame(Self.placement(size: size, point: point, anchor: anchor, visible: visible), display: true)
         }
         panel.orderFrontRegardless()
     }
 
+    /// 选浮窗的位置：优先放在选中文字的下方、上方、右侧、左侧，不挡住选中的文字；
+    /// 上下空间不够整窗时允许变矮（不低于 220）；都放不下时贴到空间较大的一侧屏幕边缘。
+    static func placement(size: NSSize, point: NSPoint, anchor: NSRect?, visible: NSRect) -> NSRect {
+        let gap: CGFloat = 8
+        let minHeight: CGFloat = 220
+        let a = anchor ?? NSRect(x: point.x, y: point.y - 4, width: 1, height: 8)
+        func clampX(_ x: CGFloat) -> CGFloat { min(max(x, visible.minX), visible.maxX - size.width) }
+        func clampY(_ y: CGFloat, _ h: CGFloat) -> CGFloat { min(max(y, visible.minY), visible.maxY - h) }
+        let x = clampX(point.x - 24)
+
+        let below = a.minY - gap - visible.minY
+        let above = visible.maxY - (a.maxY + gap)
+        if below >= size.height { return NSRect(x: x, y: a.minY - gap - size.height, width: size.width, height: size.height) }
+        if above >= size.height { return NSRect(x: x, y: a.maxY + gap, width: size.width, height: size.height) }
+
+        let right = visible.maxX - (a.maxX + gap)
+        let left = a.minX - gap - visible.minX
+        let y = clampY(point.y - size.height / 2, size.height)
+        if right >= size.width { return NSRect(x: a.maxX + gap, y: y, width: size.width, height: size.height) }
+        if left >= size.width { return NSRect(x: a.minX - gap - size.width, y: y, width: size.width, height: size.height) }
+
+        // 上下都放不下整窗：放进空间大的那边并变矮
+        if max(below, above) >= minHeight {
+            let h = max(below, above)
+            let originY = below >= above ? a.minY - gap - h : a.maxY + gap
+            return NSRect(x: x, y: originY, width: size.width, height: h)
+        }
+        // 选区几乎占满屏幕：贴到左右空间较大的一侧
+        let edgeX = (point.x - visible.minX) > (visible.maxX - point.x) ? visible.minX : visible.maxX - size.width
+        return NSRect(x: edgeX, y: y, width: size.width, height: size.height)
+    }
+
     private func makePanel() -> PopupPanel {
-        let panel = PopupPanel(contentRect: NSRect(origin: .zero, size: size),
+        let panel = PopupPanel(contentRect: NSRect(origin: .zero, size: compactSize),
                                styleMask: [.titled, .fullSizeContentView, .resizable, .nonactivatingPanel],
                                backing: .buffered, defer: false)
         panel.titleVisibility = .hidden
@@ -313,13 +352,40 @@ final class PopupController {
         panel.hidesOnDeactivate = false
         panel.isMovableByWindowBackground = true
         panel.isReleasedWhenClosed = false
-        panel.minSize = NSSize(width: 300, height: 180)
+        panel.minSize = NSSize(width: 320, height: 180)
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.onEscape = { [weak self] in self?.close() }
         let host = NSHostingView(rootView: TranslationView(model: model, onClose: { [weak self] in self?.close() }))
         host.sizingOptions = []
         panel.contentView = host
-        panel.setContentSize(size)
+        panel.setContentSize(compactSize)
         return panel
+    }
+}
+
+extension PopupController {
+    /// 开发用（见 Debug.swift）：显示假的原文和译文，不调用翻译服务。
+    func showDemo(_ capture: Capture, result: String, sceneID: String?, near point: NSPoint) {
+        show(capture, near: point)
+        model.cancel()
+        if let sceneID { model.scene = SceneStore.shared.scene(id: sceneID) }
+        if ProcessInfo.processInfo.environment["FANYI_DEMO_STREAM"] == nil { model.result = result; return }
+        model.isLoading = true
+        Task {
+            var rest = Substring(result)
+            while !rest.isEmpty {
+                model.result += rest.prefix(12)
+                rest = rest.dropFirst(12)
+                try? await Task.sleep(for: .milliseconds(8))
+            }
+            model.isLoading = false
+        }
+    }
+
+    func snapshot(to url: URL) {
+        guard let view = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible && $0.frame.width > 100 })?.contentView,
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
     }
 }

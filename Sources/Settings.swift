@@ -55,6 +55,7 @@ enum Settings {
     static let bedrockRegionKey = "bedrock.region"
     static let selectionIconKey = "selectionIconEnabled"
     static let copyFallbackKey = "copyFallbackEnabled"
+    static let enhancedAccessibilityKey = "enhancedAccessibilityEnabled"
     static let historyEnabledKey = "historyEnabled"
     static let screenshotVisionKey = "screenshotVisionEnabled"
 
@@ -117,6 +118,7 @@ enum Settings {
             bedrockRegionKey: defaultBedrockRegion,
             selectionIconKey: true,
             copyFallbackKey: true,
+            enhancedAccessibilityKey: true,
             historyEnabledKey: true,
             screenshotVisionKey: false,
         ]
@@ -152,7 +154,11 @@ enum Settings {
 
     static var selectionIconEnabled: Bool { UserDefaults.standard.bool(forKey: selectionIconKey) }
     static var copyFallbackEnabled: Bool { UserDefaults.standard.bool(forKey: copyFallbackKey) }
-    static var historyEnabled: Bool { UserDefaults.standard.bool(forKey: historyEnabledKey) }
+    static var enhancedAccessibilityEnabled: Bool { UserDefaults.standard.bool(forKey: enhancedAccessibilityKey) }
+    /// 演示截图模式（Debug.swift）不记历史，免得假数据混进真实的查词历史。
+    static var historyEnabled: Bool {
+        UserDefaults.standard.bool(forKey: historyEnabledKey) && ProcessInfo.processInfo.environment["FANYI_DEMO_DIR"] == nil
+    }
     static var screenshotVisionEnabled: Bool { UserDefaults.standard.bool(forKey: screenshotVisionKey) }
 }
 
