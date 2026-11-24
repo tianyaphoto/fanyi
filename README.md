@@ -42,7 +42,7 @@
 
 ## 下载安装
 
-到 [Releases](https://github.com/tianyaphoto/fanyi/releases/latest) 下载 `Fanyi-版本号.zip`，解压后把 `Fanyi.app` 拖进「应用程序」文件夹。支持 Apple 芯片和 Intel 芯片的 Mac。
+到 [Releases](https://github.com/tianyaphoto/fanyi/releases/latest) 下载 `Fanyi.zip`，解压后把 `Fanyi.app` 拖进「应用程序」文件夹。支持 Apple 芯片和 Intel 芯片的 Mac。
 
 这个 App 没有经过苹果公证，第一次打开时系统会拦下。处理方法（二选一）：
 

@@ -6,7 +6,7 @@ import SwiftUI
 ///     FANYI_DEMO_DIR=/path/to/dir build/Build/Products/Release/Fanyi.app/Contents/MacOS/Fanyi
 ///
 /// 目录里放 source.txt（原文）、result.txt（译文），可选 context.txt（原句）、origin.txt（来源）、
-/// scene.txt（场景 id）。截图写到同目录的 snapshot.png，然后退出。
+/// scene.txt（场景 id）、glossary.txt（假装命中的术语）。截图写到同目录的 snapshot.png，然后退出。
 @MainActor
 enum DemoMode {
     static var directory: URL? {

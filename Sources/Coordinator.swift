@@ -369,6 +369,10 @@ extension PopupController {
         show(capture, near: point)
         model.cancel()
         if let sceneID { model.scene = SceneStore.shared.scene(id: sceneID) }
+        if let dir = DemoMode.directory,
+           let glossary = try? String(contentsOf: dir.appendingPathComponent("glossary.txt"), encoding: .utf8) {
+            model.retrieval = Retrieval(glossary: KnowledgeStore.parseGlossary(glossary))
+        }
         if ProcessInfo.processInfo.environment["FANYI_DEMO_STREAM"] == nil { model.result = result; return }
         model.isLoading = true
         Task {
