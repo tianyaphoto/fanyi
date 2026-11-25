@@ -133,13 +133,13 @@ final class Coordinator {
         }
     }
 
-    private struct Shot {
+    struct Shot {
         var text: String
         var image: ImageAttachment?
     }
 
     /// 读取截图：本地 OCR（Apple Vision），看图翻译时再附上图片本身。返回 nil 表示没有截图文件（用户取消）。
-    nonisolated private static func readScreenshot(at url: URL, withImage: Bool) -> Shot? {
+    nonisolated static func readScreenshot(at url: URL, withImage: Bool) -> Shot? {
         guard let image = NSImage(contentsOf: url),
               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         return Shot(text: recognizeText(in: cgImage), image: withImage ? attachment(from: cgImage) : nil)
@@ -168,11 +168,12 @@ final class Coordinator {
         return ImageAttachment(data: jpeg, mediaType: "image/jpeg")
     }
 
-    /// 识别语言：设置里的两种语言排前面（系统支持的话），再加上中文和英文。
+    /// 识别语言：英文、设置里的两种语言（系统支持的话）、中文；配合 automaticallyDetectsLanguage 由系统逐段判断。
+    /// 不开自动判断时，排第一的语言会压过其它语言：英文排第一，中文整段认成乱码；中文排第一，英文变成全角标点、of 认成 0f。
     nonisolated private static func ocrLanguages(_ request: VNRecognizeTextRequest) -> [String] {
         let supported = (try? request.supportedRecognitionLanguages()) ?? []
         let pair = Settings.languagePair
-        var result: [String] = []
+        var result: [String] = ["en-US"]
         for language in [pair.primary, pair.secondary] {
             let match = supported.first { $0 == language.code }
                 ?? (language.isChinese ? nil : supported.first { $0.hasPrefix(language.code + "-") })
@@ -182,14 +183,33 @@ final class Coordinator {
         return result
     }
 
+    /// 本地 OCR。先用「英文优先 + 系统自动判断语言」认一遍；结果里一个汉字、假名、韩文都没有时，
+    /// 再用「中文（或设置里的日语、韩语）优先」认一遍，认出的这类文字更多就用第二遍。
+    /// 原因：自动判断有时会把整张中文截图判成英文，中文被认成「REE É ₩」之类的乱码（Claude 桌面版截图实际遇到过）。
     nonisolated private static func recognizeText(in cgImage: CGImage) -> String {
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = true
-        request.recognitionLanguages = ocrLanguages(request)
-        try? VNImageRequestHandler(cgImage: cgImage).perform([request])
-        let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
-        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        func run(cjkFirst: Bool) -> String {
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+            var languages = ocrLanguages(request)
+            if cjkFirst {
+                let pair = Settings.languagePair
+                let wide = [pair.primary, pair.secondary].first { $0.script == .japanese || $0.script == .hangul }
+                let lead = wide.flatMap { lang in languages.first { $0.hasPrefix(lang.code + "-") } } ?? "zh-Hans"
+                languages.removeAll { $0 == lead }
+                languages.insert(lead, at: 0)
+            }
+            request.recognitionLanguages = languages
+            request.automaticallyDetectsLanguage = !cjkFirst
+            try? VNImageRequestHandler(cgImage: cgImage).perform([request])
+            let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+            return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let first = run(cjkFirst: false)
+        guard ScriptProfile(first).wide == 0 else { return first }
+        let second = run(cjkFirst: true)
+        let profile = ScriptProfile(second)
+        return Double(profile.wide) >= max(2, profile.total * 0.15) ? second : first
     }
 }
 

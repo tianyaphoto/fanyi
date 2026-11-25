@@ -29,8 +29,16 @@ enum DemoMode {
             KnowledgeStore.shared.demoGlossary = read("glossary.txt").map { KnowledgeStore.parseGlossary($0) } ?? []
             let source = SourceInfo(appName: read("app.txt") ?? "", bundleID: read("bundle.txt") ?? "",
                                     windowTitle: read("title.txt") ?? "", url: read("url.txt") ?? "")
-            let live = Capture(text: read("source.txt") ?? "", context: read("context.txt"),
+            var live = Capture(text: read("source.txt") ?? "", context: read("context.txt"),
                                source: source.appName.isEmpty && source.url.isEmpty ? nil : source)
+            // shot.png：当作截图翻译的截图（走本地 OCR，设置里开了看图翻译时也附上图片），识别结果写到 ocr.txt
+            let shotURL = dir.appendingPathComponent("shot.png")
+            if FileManager.default.fileExists(atPath: shotURL.path),
+               let shot = Coordinator.readScreenshot(at: shotURL, withImage: Settings.screenshotVisionEnabled && Settings.provider.supportsVision) {
+                try? shot.text.write(to: dir.appendingPathComponent("ocr.txt"), atomically: true, encoding: .utf8)
+                live.text = shot.text
+                live.image = shot.image
+            }
             if read("input") != nil {
                 popup.showInput()
                 popup.model.inputText = live.text
