@@ -414,6 +414,14 @@ extension PopupController {
         }
     }
 
+    func resizeForDemo(height: Double) {
+        guard let panel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible && $0.frame.width > 100 }) else { return }
+        var frame = panel.frame
+        frame.origin.y -= height - frame.height
+        frame.size.height = height
+        panel.setFrame(frame, display: true)
+    }
+
     /// 模拟在固定按钮的位置按下、松开鼠标（走窗口正常的事件分发，标题栏会不会吃掉点击也能测出来）。
     func clickPinForTesting() {
         guard let panel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible && $0.frame.width > 100 }) else { return }

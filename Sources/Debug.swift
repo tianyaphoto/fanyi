@@ -22,6 +22,35 @@ enum DemoMode {
         let capture = Capture(text: read("source.txt") ?? "", context: read("context.txt"),
                               source: read("origin.txt").map { SourceInfo(appName: $0) })
         let screen = NSScreen.main?.visibleFrame ?? .zero
+        // FANYI_DEMO_LIVE=1：真的调用翻译服务（来源信息来自 app.txt / bundle.txt / title.txt / url.txt，
+        // 场景自动识别；scene.txt 可强制场景；glossary.txt 临时术语表；input=1 文件存在时走输入翻译）。
+        // 翻完截图，并把译文写到 result-live.txt、场景写到 scene-live.txt。
+        if ProcessInfo.processInfo.environment["FANYI_DEMO_LIVE"] != nil {
+            KnowledgeStore.shared.demoGlossary = read("glossary.txt").map { KnowledgeStore.parseGlossary($0) } ?? []
+            let source = SourceInfo(appName: read("app.txt") ?? "", bundleID: read("bundle.txt") ?? "",
+                                    windowTitle: read("title.txt") ?? "", url: read("url.txt") ?? "")
+            let live = Capture(text: read("source.txt") ?? "", context: read("context.txt"),
+                               source: source.appName.isEmpty && source.url.isEmpty ? nil : source)
+            if read("input") != nil {
+                popup.showInput()
+                popup.model.inputText = live.text
+                popup.model.submitInput()
+            } else {
+                popup.show(live, near: NSPoint(x: screen.midX - 200, y: screen.midY + 250))
+                if let forced = read("scene.txt") { popup.model.translate(live, isRetry: true, sceneID: forced) }
+                if let h = read("height.txt").flatMap(Double.init) { popup.resizeForDemo(height: h) }
+            }
+            Task {
+                try? await Task.sleep(for: .milliseconds(500))
+                for _ in 0..<900 where popup.model.isLoading { try? await Task.sleep(for: .milliseconds(100)) }
+                try? await Task.sleep(for: .milliseconds(800))
+                try? popup.model.result.write(to: dir.appendingPathComponent("result-live.txt"), atomically: true, encoding: .utf8)
+                try? popup.model.scene.name.write(to: dir.appendingPathComponent("scene-live.txt"), atomically: true, encoding: .utf8)
+                popup.snapshot(to: dir.appendingPathComponent("snapshot.png"))
+                NSApp.terminate(nil)
+            }
+            return
+        }
         // FANYI_DEMO_SETTINGS=1：截设置窗口（滚到一键改写那一节）
         if ProcessInfo.processInfo.environment["FANYI_DEMO_SETTINGS"] != nil {
             Windows.showSettings()

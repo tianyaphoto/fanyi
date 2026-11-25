@@ -94,7 +94,13 @@ final class KnowledgeStore {
     // MARK: - 检索
 
     /// 找出和待翻译文本相关的术语与资料片段。
+    /// 开发用（演示截图）：临时指定术语表，不读写用户自己的资料库
+    @ObservationIgnored var demoGlossary: [GlossaryEntry]?
+
     func retrieve(text: String, context: String?, sceneID: String) -> Retrieval {
+        if let demoGlossary {
+            return Retrieval(glossary: Self.matchGlossary(demoGlossary, in: text))
+        }
         guard isEnabled else { return .empty }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .empty }
