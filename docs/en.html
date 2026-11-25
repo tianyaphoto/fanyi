@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fanyi — macOS Translator</title>
+<meta property="og:image" content="https://tianyaphoto.github.io/fanyi/assets/app-icon.png">
+<meta name="description" content="Fanyi: a lightweight macOS menu bar translator for English and Chinese — select to translate, screenshot translation, one-key polish into natural English, translation scenes, glossary. Free and open source.">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/app-icon-256.png">
+<style>
+:root {
+  --bg: #fbfbfd;
+  --surface: #ffffff;
+  --surface-2: #f2f3f7;
+  --text: #1d1d1f;
+  --muted: #5f6370;
+  --faint: #8a8f9c;
+  --line: #e3e5eb;
+  --accent: #2f6fed;
+  --accent-text: #ffffff;
+  --accent-soft: #e8efff;
+  --warn-soft: #fff6e5;
+  --warn-line: #f1d6a0;
+  --shadow: 0 18px 50px rgba(20, 30, 60, .14);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111214;
+    --surface: #1a1b1e;
+    --surface-2: #222429;
+    --text: #f2f3f5;
+    --muted: #a6abb6;
+    --faint: #7c818c;
+    --line: #2d3036;
+    --accent: #5b8cff;
+    --accent-text: #0d1220;
+    --accent-soft: #1d2740;
+    --warn-soft: #2a2416;
+    --warn-line: #5a4a24;
+    --shadow: 0 18px 50px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111214; --surface: #1a1b1e; --surface-2: #222429; --text: #f2f3f5; --muted: #a6abb6; --faint: #7c818c;
+  --line: #2d3036; --accent: #5b8cff; --accent-text: #0d1220; --accent-soft: #1d2740; --warn-soft: #2a2416;
+  --warn-line: #5a4a24; --shadow: 0 18px 50px rgba(0, 0, 0, .5); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.7 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+code { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface-2); padding: 2px 6px; border-radius: 5px; }
+pre { margin: 0; overflow-x: auto; }
+pre code { display: block; padding: 12px 14px; white-space: pre; }
+
+header.top { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--text); }
+.brand:hover { text-decoration: none; }
+.logo { width: 34px; height: 34px; display: block; }
+.hero-icon { width: 96px; height: 96px; display: block; margin: 0 0 18px -6px; }
+.top nav { display: flex; gap: 20px; font-size: 14px; }
+.top nav a { color: var(--muted); }
+
+.hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; padding: 40px 0 72px; }
+.hero h1 { font-size: 44px; line-height: 1.2; margin: 0 0 16px; letter-spacing: -.01em; }
+.hero p.lead { font-size: 18px; color: var(--muted); margin: 0 0 28px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border-radius: 10px; font-weight: 600; font-size: 16px; }
+.btn:hover { text-decoration: none; }
+.btn-primary { background: var(--accent); color: var(--accent-text); }
+.btn-primary:hover { filter: brightness(1.07); }
+.btn-ghost { border: 1px solid var(--line); color: var(--text); background: var(--surface); }
+.meta { margin-top: 14px; font-size: 13px; color: var(--faint); }
+.shot { border-radius: 14px; box-shadow: var(--shadow); border: 1px solid var(--line); width: 100%; height: auto; display: block; }
+.shot-stack { position: relative; }
+.shot-stack .shot.small { position: absolute; width: 62%; right: -18px; bottom: -48px; }
+
+section { padding: 56px 0; border-top: 1px solid var(--line); }
+section h2 { font-size: 28px; margin: 0 0 8px; }
+section p.sub { color: var(--muted); margin: 0 0 28px; max-width: 720px; }
+
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 16px; }
+.card h3 { margin: 0 0 6px; font-size: 16px; }
+.card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
+.kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; background: var(--surface-2); color: var(--text); }
+
+.scenes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.scene { padding: 14px 16px; border-radius: 10px; background: var(--surface-2); }
+.scene b { display: block; margin-bottom: 2px; }
+.scene span { font-size: 13px; color: var(--muted); }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+ul.clean { margin: 0; padding-left: 20px; color: var(--muted); }
+ul.clean li { margin: 6px 0; }
+ul.clean b { color: var(--text); font-weight: 600; }
+
+.steps { counter-reset: s; display: grid; gap: 14px; }
+.step { display: grid; grid-template-columns: 32px 1fr; gap: 12px; }
+.step::before { counter-increment: s; content: counter(s); width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 600; font-size: 14px; }
+.step h3 { margin: 2px 0 4px; font-size: 16px; }
+.step p { margin: 0; color: var(--muted); font-size: 14px; }
+.note { margin-top: 20px; padding: 14px 16px; background: var(--warn-soft); border: 1px solid var(--warn-line); border-radius: 10px; font-size: 14px; color: var(--text); }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--faint); font-weight: 500; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+
+footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--faint); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+
+@media (max-width: 860px) {
+  .hero { grid-template-columns: 1fr; gap: 56px; padding-top: 16px; }
+  .hero h1 { font-size: 34px; }
+  .grid, .scenes { grid-template-columns: 1fr 1fr; }
+  .two { grid-template-columns: 1fr; }
+  .shot-stack .shot.small { right: -6px; bottom: -36px; }
+}
+@media (max-width: 560px) {
+  .grid, .scenes { grid-template-columns: 1fr; }
+  .top nav a.hide-s { display: none; }
+  .btn { width: 100%; justify-content: center; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="en.html"><img class="logo" src="assets/favicon.png" width="30" height="30" alt="">Fanyi</a>
+    <nav>
+      <a href="#features" class="hide-s">Features</a>
+      <a href="#polish" class="hide-s">One-key polish</a>
+      <a href="#scenes" class="hide-s">Scenes</a>
+      <a href="#install">Install</a>
+      <a href="./">中文</a>
+      <a href="https://github.com/tianyaphoto/fanyi">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <div>
+      <img class="hero-icon" src="assets/app-icon-256.png" width="96" height="96" alt="Fanyi icon">
+      <h1>Select it.<br>Understand it.</h1>
+      <p class="lead">Fanyi is a lightweight macOS menu bar translator for English ⇄ Chinese. Select text in any app, translate screenshots, and turn what you are typing into natural English with one shortcut — with translation rules that change with where you are: documents, code, chat or contracts.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/tianyaphoto/fanyi/releases/latest/download/Fanyi.zip">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          Download for macOS
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/tianyaphoto/fanyi">View source</a>
+      </div>
+      <div class="meta">Free and open source (MIT) · Notarised by Apple · macOS 14+ · Apple silicon and Intel · The app's interface is in Chinese · <a href="https://github.com/tianyaphoto/fanyi/releases">All releases</a></div>
+    </div>
+    <div class="shot-stack">
+      <img class="shot" src="assets/popup-document.png" width="1160" height="720" alt="Translation popup: an English paragraph from Google Docs translated in the Document scene with 5 glossary terms">
+      <img class="shot small" src="assets/popup-word.png" width="840" height="600" alt="Word lookup: dictionary entry first, then an AI explanation in the context of the selected sentence">
+    </div>
+  </div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Features</h2>
+    <p class="sub">Lives in the menu bar and stays out of your way. Words get pronunciation, senses and examples; sentences and paragraphs get a fluent translation; Chinese is translated into English automatically.</p>
+    <div class="grid">
+      <div class="card"><h3>Select to translate</h3><p>Select text in any app, click the little icon next to the pointer, or press <span class="kbd">⌥D</span>. Works in Chrome, VS Code and Google Docs too.</p></div>
+      <div class="card"><h3>Screenshot translation</h3><p>Press <span class="kbd">⌥S</span> and drag a box; text is recognised on your Mac and translated. Optional vision mode for tables, formulas and handwriting.</p></div>
+      <div class="card"><h3>Input translation</h3><p>Press <span class="kbd">⌥A</span>, type, press Return — like Spotlight for translation.</p></div>
+      <div class="card"><h3>Translates, never answers</h3><p>A question or instruction is translated, not answered. Output is checked and retried once if it doesn't look like a translation.</p></div>
+      <div class="card"><h3>Words in context</h3><p>Looking up a word reads the sentence it came from and explains what it means right there, after the instant dictionary entry.</p></div>
+      <div class="card"><h3>Long text that fits</h3><p>A larger popup, collapsible source and paragraph-by-paragraph bilingual view; the popup avoids covering your selection.</p></div>
+      <div class="card"><h3>One-key polish</h3><p>Press <span class="kbd">⌃⌥⌘T</span> in any text field: Chinese becomes English, English gets fixed — pasted back in place.</p></div>
+      <div class="card"><h3>Vocabulary book</h3><p>Save words with the sentence and document they came from; repeated lookups are flagged so you notice what to learn.</p></div>
+      <div class="card"><h3>Auto-update</h3><p>New versions show their release notes and install in one click. Your settings and data are kept.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="polish">
+  <div class="wrap two">
+    <div>
+      <h2>One-key polish</h2>
+      <p class="sub">Write your message in the chat box or document, press <span class="kbd">⌃⌥⌘T</span>: Chinese or mixed text becomes concise, natural work English; English gets its spelling and grammar fixed. The result replaces your text — Fanyi never presses Return for you.</p>
+      <ul class="clean">
+        <li><b>Clipboard too</b>: copy some text and press <span class="kbd">⌃⇧⌘C</span> to paste the rewrite at the cursor.</li>
+        <li><b>Rewrites, never answers</b>: questions stay questions, requests stay requests.</li>
+        <li><b>Keeps what matters</b>: links and code stay verbatim; British spelling by default (American optional); add your own instructions.</li>
+        <li><b>Pastes in the right place</b>: it checks you are still in the same field and didn't type or click meanwhile, then reads the field back to confirm.</li>
+        <li><b>Diagnostics log</b>: every step is recorded, never your text.</li>
+      </ul>
+    </div>
+    <div>
+      <pre><code># You type
+你明天有空吗？想跟你对一下 Q4 的规划。
+
+# After ⌃⌥⌘T
+Are you free tomorrow? I'd like to run
+through the Q4 plan with you.
+
+# You type
+i think we should finalize the design
+today, what do u think
+
+# After ⌃⌥⌘T
+I think we should finalise the design
+today. What do you think?</code></pre>
+    </div>
+  </div>
+</section>
+
+<section id="scenes">
+  <div class="wrap">
+    <h2>Translation scenes</h2>
+    <p class="sub">The same English deserves a different translation in a design doc, a code review, a Slack thread or a contract. Fanyi picks the scene from the current app, window title and URL; switch it from the popup, tell it to remember a site, edit each scene's rules or create your own.</p>
+    <div class="scenes">
+      <div class="scene"><b>Document</b><span>Formal written style, headings, lists and tables kept, consistent terms. Google Docs, Notion, Word, Feishu…</span></div>
+      <div class="scene"><b>Technical</b><span>Code, commands and error messages untouched, standard industry terms. GitHub, VS Code, Terminal, docs sites…</span></div>
+      <div class="scene"><b>Academic</b><span>Rigorous academic style; citations and formulas kept; terms glossed on first use. arXiv, Google Scholar…</span></div>
+      <div class="scene"><b>Email &amp; chat</b><span>Follows the tone of the original; English replies read like a native speaker wrote them. Slack, Mail, WeChat, Teams…</span></div>
+      <div class="scene"><b>Contracts</b><span>Strictly literal, distinguishes shall / may, defined terms consistent throughout.</span></div>
+      <div class="scene"><b>General / custom</b><span>Everything else uses the general rules — or create your own scene, e.g. “insurance product docs”.</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap two">
+    <div>
+      <h2>Knowledge base &amp; glossary</h2>
+      <p class="sub">Add your project docs, product notes or past translations. Fanyi retrieves the most relevant passages on your Mac and uses them as reference, so names and phrasing match your own material.</p>
+      <ul class="clean">
+        <li><b>Formats</b>: text, Markdown, PDF, Word, RTF, HTML — drag in files or whole folders.</li>
+        <li><b>Glossary</b>: one “source = target” per line, always applied; import CSV.</li>
+        <li><b>Per scene</b>: limit a document to certain scenes.</li>
+        <li><b>Visible</b>: the popup shows “References N” — click to see what was used.</li>
+        <li><b>Local search</b>: retrieval runs on your Mac; no extra service is called.</li>
+      </ul>
+    </div>
+    <div>
+      <pre><code># Glossary example
+claim = 理赔
+premium = 保费
+underwriting = 核保
+canary = 灰度发布
+SLA = 服务等级协议</code></pre>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap two">
+    <div>
+      <h2>Install</h2>
+      <p class="sub">Download, unzip, drag into Applications, double-click.</p>
+      <div class="steps">
+        <div class="step"><div><h3>Download and unzip</h3><p><a href="https://github.com/tianyaphoto/fanyi/releases/latest/download/Fanyi.zip">Download Fanyi.zip</a>, unzip it and drag Fanyi.app into Applications.</p></div></div>
+        <div class="step"><div><h3>Open</h3><p>It is notarised by Apple, so it opens with a double-click. Look for the speech-bubble icon in the menu bar.</p></div></div>
+        <div class="step"><div><h3>Pick a service</h3><p>Settings open on first launch. Choose a translation service and paste its API key — or use <code>claude -p</code> with Claude Code, no key needed.</p></div></div>
+        <div class="step"><div><h3>Grant permissions</h3><p>Accessibility for select-to-translate and one-key polish; Screen Recording for screenshot translation. The settings window links to both.</p></div></div>
+      </div>
+      <div class="note">Build it yourself: <code>brew install xcodegen</code>, clone the repo, run <code>./build.sh install</code>.</div>
+    </div>
+    <div>
+      <h2>Translation services</h2>
+      <p class="sub">Keys, endpoints and models are saved per service and stay on your Mac.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Service</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Claude API</td><td>Default claude-opus-5-5; haiku for speed</td></tr>
+            <tr><td>AWS Bedrock</td><td>Claude via Bedrock</td></tr>
+            <tr><td>Bedrock gateway</td><td>Corporate gateway or proxy, x-api-key or Bearer, extra headers</td></tr>
+            <tr><td>OpenAI API</td><td>Chat Completions, default gpt-5-mini</td></tr>
+            <tr><td>DeepSeek</td><td>Default deepseek-chat</td></tr>
+            <tr><td>Qwen</td><td>Alibaba Cloud Model Studio, default qwen-plus</td></tr>
+            <tr><td>Custom</td><td>Any OpenAI-compatible service: Kimi, Zhipu, OpenRouter, local Ollama…</td></tr>
+            <tr><td>claude -p</td><td>Claude Code on your Mac, uses your Claude plan</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Privacy</h2>
+    <p class="sub" style="margin-bottom:0">Your vocabulary, history, knowledge base and API keys stay on your Mac (keys in a plaintext file readable only by your account). The text you translate or polish, the surrounding sentence and any retrieved reference passages are sent to the service you chose — nowhere else. Polish keeps your original and the result in memory only.</p>
+  </div>
+</section>
+
+<div class="wrap">
+  <footer>
+    <span>Fanyi · MIT License</span>
+    <span><a href="https://github.com/tianyaphoto/fanyi">GitHub</a> · <a href="https://github.com/tianyaphoto/fanyi/issues">Report an issue</a> · <a href="./">中文</a></span>
+  </footer>
+</div>
+</body>
+</html>

@@ -2,6 +2,8 @@
 
 # 翻译神器（Fanyi）
 
+**中文** · [English](README.en.md)
+
 一个轻量的 macOS 菜单栏翻译工具：看文档时划词就能翻译，截图也能翻译，还能把不熟悉的词收进生词本。翻译由大模型完成，可以接 Claude API、AWS Bedrock、OpenAI API、DeepSeek、通义千问和其他 OpenAI 兼容服务，也可以直接调用本机的 Claude Code（`claude -p`）。
 
 ## 功能
