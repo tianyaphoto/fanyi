@@ -14,6 +14,10 @@ final class Coordinator {
     private var capturing = false
 
     func start() {
+        if let target = AXProbe.target {
+            AXProbe.run(target)
+            return
+        }
         if let mode = PolishSelfTest.mode {
             PolishSelfTest.run(mode)
             return

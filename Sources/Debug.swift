@@ -183,3 +183,38 @@ enum ClickSelfTest {
         }
     }
 }
+
+/// 开发用：探测辅助功能接口在当前环境（例如沙盒）里能读到什么。
+///
+///     FANYI_AX_PROBE=<目标 App 的 Bundle ID> /Applications/Fanyi.app/Contents/MacOS/Fanyi
+enum AXProbe {
+    static var target: String? { ProcessInfo.processInfo.environment["FANYI_AX_PROBE"] }
+
+    static func run(_ bundle: String) {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        print("辅助功能已授权：\(AXIsProcessTrusted())")
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundle).first else {
+            print("找不到 \(bundle)"); exit(2)
+        }
+        func copy(_ element: AXUIElement, _ attr: String) -> (AXError, CFTypeRef?) {
+            var value: CFTypeRef?
+            let err = AXUIElementCopyAttributeValue(element, attr as CFString, &value)
+            return (err, value)
+        }
+        let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        let (e1, windows) = copy(axApp, kAXWindowsAttribute)
+        print("App 元素 → 窗口列表：err=\(e1.rawValue) 数量=\((windows as? [AXUIElement])?.count ?? -1)")
+        let (e2, focused) = copy(axApp, kAXFocusedUIElementAttribute)
+        print("App 元素 → 焦点元素：err=\(e2.rawValue)")
+        if let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() {
+            let el = focused as! AXUIElement
+            let (e3, value) = copy(el, kAXValueAttribute)
+            print("焦点元素 → 文字：err=\(e3.rawValue) 长度=\((value as? String)?.count ?? -1)")
+            let (e4, sel) = copy(el, kAXSelectedTextAttribute)
+            print("焦点元素 → 选中文字：err=\(e4.rawValue) 长度=\((sel as? String)?.count ?? -1)")
+        }
+        let (e5, _) = copy(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute)
+        print("系统元素 → 焦点元素：err=\(e5.rawValue)")
+        exit(0)
+    }
+}

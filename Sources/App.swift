@@ -7,6 +7,7 @@ struct FanyiApp: App {
         || ProcessInfo.processInfo.environment["FANYI_DEMO_DIR"] != nil
         || ProcessInfo.processInfo.environment["FANYI_POLISH_SELFTEST"] != nil
         || ProcessInfo.processInfo.environment["FANYI_CLICK_SELFTEST"] != nil
+        || ProcessInfo.processInfo.environment["FANYI_AX_PROBE"] != nil
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 

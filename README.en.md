@@ -51,7 +51,7 @@ API keys are stored per service in a plaintext file under `~/Library/Application
 
 ## Install
 
-1. Download `Fanyi.zip` from the [latest release](https://github.com/tianyaphoto/fanyi/releases/latest), unzip, and drag `Fanyi.app` into Applications. Apple silicon and Intel; macOS 14 Sonoma or later.
+1. With Homebrew: `brew install --cask tianyaphoto/tap/fanyi`. Or download `Fanyi.zip` from the [latest release](https://github.com/tianyaphoto/fanyi/releases/latest), unzip, and drag `Fanyi.app` into Applications. Apple silicon and Intel; macOS 14 Sonoma or later.
 2. It is signed with a Developer ID and notarised by Apple — just double-click to open. A speech-bubble icon with 「译」 appears in the menu bar and settings open on first launch.
 3. Pick a translation service in settings and enter its key (not needed for `claude -p`).
 4. Grant **Accessibility** (select-to-translate, one-key polish) and **Screen Recording** (screenshot translation) in System Settings → Privacy & Security; the settings window has shortcuts to both. Relaunch after granting Screen Recording.
