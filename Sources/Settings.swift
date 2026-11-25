@@ -3,10 +3,10 @@ import Security
 
 /// 翻译服务。
 enum Provider: String, CaseIterable, Identifiable {
-    case claude, bedrock, openai, deepseek, qwen, custom, claudeCLI
+    case claude, bedrock, bedrockGateway, openai, deepseek, qwen, custom, claudeCLI
 
     /// 接口格式：同一种格式的服务共用一套请求代码。
-    enum Kind { case anthropic, openAICompatible, cli }
+    enum Kind { case anthropic, openAICompatible, bedrockInvoke, cli }
 
     var id: String { rawValue }
 
@@ -14,6 +14,7 @@ enum Provider: String, CaseIterable, Identifiable {
         switch self {
         case .claude: return "Claude API"
         case .bedrock: return "AWS Bedrock（Claude）"
+        case .bedrockGateway: return "Bedrock 网关（Claude）"
         case .openai: return "OpenAI API"
         case .deepseek: return "DeepSeek"
         case .qwen: return "通义千问"
@@ -26,6 +27,7 @@ enum Provider: String, CaseIterable, Identifiable {
         switch self {
         case .claude, .bedrock: return .anthropic
         case .openai, .deepseek, .qwen, .custom: return .openAICompatible
+        case .bedrockGateway: return .bedrockInvoke
         case .claudeCLI: return .cli
         }
     }
@@ -44,7 +46,10 @@ enum Provider: String, CaseIterable, Identifiable {
         case .claudeCLI: return true
         // 自定义服务可以没有 API Key（例如本机的 Ollama），但必须填地址和模型
         case .custom: return !Settings.baseURL(for: self).isEmpty && !Settings.model(for: self).isEmpty
-        default: return !(Keychain.apiKey(for: self) ?? "").isEmpty
+        case .bedrockGateway:
+            return !Settings.baseURL(for: self).isEmpty && !Settings.model(for: self).isEmpty
+                && !(APIKeyStore.apiKey(for: self) ?? "").isEmpty
+        default: return !(APIKeyStore.apiKey(for: self) ?? "").isEmpty
         }
     }
 }
@@ -58,6 +63,30 @@ enum Settings {
     static let enhancedAccessibilityKey = "enhancedAccessibilityEnabled"
     static let historyEnabledKey = "historyEnabled"
     static let screenshotVisionKey = "screenshotVisionEnabled"
+    static let bedrockGatewayAuthKey = "bedrockGateway.auth"
+
+    enum GatewayAuth: String, CaseIterable, Identifiable {
+        case apiKey, bearer
+        var id: String { rawValue }
+        var title: String { self == .apiKey ? "x-api-key" : "Bearer Token" }
+    }
+
+    static var bedrockGatewayAuth: GatewayAuth {
+        GatewayAuth(rawValue: UserDefaults.standard.string(forKey: bedrockGatewayAuthKey) ?? "") ?? .apiKey
+    }
+
+    static func extraHeadersKey(for provider: Provider) -> String { "\(provider.rawValue).headers" }
+
+    /// 额外请求头：每行「名称: 值」。
+    static func extraHeaders(for provider: Provider) -> [(String, String)] {
+        let raw = UserDefaults.standard.string(forKey: extraHeadersKey(for: provider)) ?? ""
+        return raw.components(separatedBy: .newlines).compactMap { line in
+            guard let colon = line.firstIndex(of: ":") else { return nil }
+            let name = line[..<colon].trimmingCharacters(in: .whitespaces)
+            let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            return name.isEmpty ? nil : (name, value)
+        }
+    }
 
     static let defaultBedrockRegion = "us-east-1"
 
@@ -85,7 +114,7 @@ enum Settings {
         case .openai: return "https://api.openai.com/v1"
         case .deepseek: return "https://api.deepseek.com"
         case .qwen: return "https://dashscope.aliyuncs.com/compatible-mode/v1"
-        case .bedrock, .custom, .claudeCLI: return ""
+        case .bedrock, .bedrockGateway, .custom, .claudeCLI: return ""
         }
     }
 
@@ -93,6 +122,7 @@ enum Settings {
         switch provider {
         case .claude: return "claude-opus-5-5"
         case .bedrock: return "anthropic.claude-haiku-4-5"
+        case .bedrockGateway: return ""
         case .openai: return "gpt-5-mini"
         case .deepseek: return "deepseek-chat"
         case .qwen: return "qwen-plus"
@@ -162,39 +192,3 @@ enum Settings {
     static var screenshotVisionEnabled: Bool { UserDefaults.standard.bool(forKey: screenshotVisionKey) }
 }
 
-/// API Key 存在系统钥匙串里，每个服务一条。
-enum Keychain {
-    private static let service = "com.local.fanyi"
-
-    private static func account(_ provider: Provider) -> String {
-        switch provider {
-        case .claude, .claudeCLI: return "anthropic-api-key"
-        default: return "\(provider.rawValue)-api-key"
-        }
-    }
-
-    private static func baseQuery(_ provider: Provider) -> [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: service,
-         kSecAttrAccount as String: account(provider)]
-    }
-
-    static func apiKey(for provider: Provider) -> String? {
-        var query = baseQuery(provider)
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    static func setAPIKey(_ value: String, for provider: Provider) {
-        SecItemDelete(baseQuery(provider) as CFDictionary)
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        var query = baseQuery(provider)
-        query[kSecValueData as String] = Data(trimmed.utf8)
-        SecItemAdd(query as CFDictionary, nil)
-    }
-}

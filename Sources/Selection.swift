@@ -130,14 +130,9 @@ enum SelectionReader {
         return text
     }
 
+    /// 和一键改写共用：完整发出 ⌘ 的按下和松开，避免系统以为 ⌘ 一直按着。
     private static func postCommandC() {
-        let source = CGEventSource(stateID: .combinedSessionState)
-        let down = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_C), keyDown: true)
-        let up = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_C), keyDown: false)
-        down?.flags = .maskCommand
-        up?.flags = .maskCommand
-        down?.post(tap: .cghidEventTap)
-        up?.post(tap: .cghidEventTap)
+        KeySynth.press(kVK_ANSI_C)
     }
 
     private enum CopyMenuItem {
@@ -228,16 +223,26 @@ final class SelectionMonitor {
 
     func start() {
         add([.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            // 点的是本 App 自己的窗口（翻译浮窗、小图标、设置）：不算“点了别处”，不关浮窗
+            guard !Self.isOverOwnWindow() else { return }
             self?.downPoint = NSEvent.mouseLocation
             self?.pending?.cancel()
             self?.onMouseDown?()
         }
         add(.leftMouseUp) { [weak self] event in
+            // 在浮窗里拖选译文不触发划词
+            guard !Self.isOverOwnWindow() else { return }
             self?.handleMouseUp(clickCount: event.clickCount)
         }
         add([.scrollWheel, .keyDown]) { [weak self] _ in
             self?.onActivity?()
         }
+    }
+
+    /// 鼠标是否在本 App 的某个可见窗口上。浮窗是不激活 App 的面板，点它时全局监听也会收到这次点击。
+    static func isOverOwnWindow() -> Bool {
+        let point = NSEvent.mouseLocation
+        return NSApp.windows.contains { $0.isVisible && $0.alphaValue > 0 && $0.frame.contains(point) }
     }
 
     private func add(_ mask: NSEvent.EventTypeMask, handler: @escaping @MainActor (NSEvent) -> Void) {

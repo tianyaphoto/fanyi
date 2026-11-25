@@ -8,6 +8,12 @@ struct SettingsView: View {
     @AppStorage(Settings.enhancedAccessibilityKey) private var enhancedAccessibility = true
     @AppStorage(Settings.historyEnabledKey) private var historyEnabled = true
     @AppStorage(Settings.screenshotVisionKey) private var screenshotVision = false
+    @AppStorage(Settings.bedrockGatewayAuthKey) private var gatewayAuth = Settings.GatewayAuth.apiKey
+    @AppStorage(PolishRules.spellingKey) private var spelling = PolishRules.Spelling.british
+    @AppStorage(PolishRules.translateInstructionsKey) private var translateInstructions = ""
+    @AppStorage(PolishRules.polishInstructionsKey) private var polishInstructions = ""
+    @State private var testing = false
+    @State private var testResult: (ok: Bool, message: String)?
 
     @State private var apiKey = ""
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -22,7 +28,7 @@ struct SettingsView: View {
                 Picker("服务", selection: $provider) {
                     ForEach(Provider.allCases) { Text($0.title).tag($0) }
                 }
-                .onChange(of: provider) { _, value in apiKey = Keychain.apiKey(for: value) ?? "" }
+                .onChange(of: provider) { _, value in apiKey = APIKeyStore.apiKey(for: value) ?? "" }
 
                 Group {
                     switch provider {
@@ -30,12 +36,21 @@ struct SettingsView: View {
                         keyField(prompt: "sk-ant-…")
                         urlField()
                         modelField()
-                        note("API Key 保存在系统钥匙串中。默认模型质量最好；想更快更省可以换成 claude-haiku-5-5。")
+                        note("默认模型质量最好；想更快更省可以换成 claude-haiku-5-5。")
                     case .bedrock:
                         keyField(prompt: "Amazon Bedrock API Key")
                         StoredField("区域", key: Settings.bedrockRegionKey, prompt: Settings.defaultBedrockRegion)
                         modelField()
                         note("通过 Amazon Bedrock 使用 Claude，模型名带 anthropic. 前缀。在 AWS 控制台的 Amazon Bedrock → API keys 中生成 Key，并确认账号已开通所选模型。短期 Key 最长 12 小时有效，过期后要重新填写。")
+                    case .bedrockGateway:
+                        keyField(prompt: "网关的 API Key")
+                        Picker("认证方式", selection: $gatewayAuth) {
+                            ForEach(Settings.GatewayAuth.allCases) { Text($0.title).tag($0) }
+                        }
+                        urlField(prompt: "https://你的网关地址")
+                        modelField()
+                        headersField()
+                        note("通过企业网关或代理调用 Bedrock 上的 Claude：请求发到「API 地址/model/模型ID/invoke」（地址里已经带 /invoke 时原样使用）。不做 AWS 签名，也不读取本机的 AWS 凭据。模型 ID 例如 us.anthropic.claude-sonnet-4-5-20250929-v1:0。")
                     case .openai:
                         keyField(prompt: "sk-…")
                         urlField()
@@ -55,6 +70,7 @@ struct SettingsView: View {
                         keyField(prompt: "不需要时留空")
                         urlField(prompt: "https://…/v1")
                         modelField()
+                        headersField()
                         note("任何兼容 OpenAI Chat Completions 的服务，例如 Kimi、智谱、硅基流动、OpenRouter，或本机的 Ollama（地址填 http://localhost:11434/v1，API Key 留空）。")
                     case .claudeCLI:
                         modelField()
@@ -63,6 +79,10 @@ struct SettingsView: View {
                     }
                 }
                 .id(provider)
+            }
+
+            Section {
+                note("所有服务的 API Key 都以明文保存在本机 ~/Library/Application Support/Fanyi/ 下（文件权限仅本人可读写），翻译和一键改写共用，不写入安装包或源码。")
             }
 
             Section("划词翻译") {
@@ -85,6 +105,39 @@ struct SettingsView: View {
                     Spacer()
                     Button("打开…") { Windows.showLibrary() }
                 }
+            }
+
+            Section {
+                Picker("英文拼写", selection: $spelling) {
+                    ForEach(PolishRules.Spelling.allCases) { Text($0.title).tag($0) }
+                }
+                instructionsEditor("中文译成英文时的额外要求", text: $translateInstructions,
+                                   placeholder: "例如：保留产品名 GrabPay 不翻译；称呼同事用名字")
+                instructionsEditor("英文纠错润色时的额外要求", text: $polishInstructions,
+                                   placeholder: "例如：语气友好但简短；不要用感叹号")
+                HStack {
+                    Button(testing ? "测试中…" : "测试连接") {
+                        testing = true
+                        testResult = nil
+                        Task {
+                            testResult = await PolishService.testConnection()
+                            testing = false
+                        }
+                    }
+                    .disabled(testing)
+                    Button("诊断日志…") { Windows.showDiagnostics() }
+                    Spacer()
+                }
+                if let testResult {
+                    Text(testResult.message)
+                        .font(Theme.caption)
+                        .foregroundStyle(testResult.ok ? Color.secondary : Theme.danger)
+                        .textSelection(.enabled)
+                }
+            } header: {
+                Text("一键改写")
+            } footer: {
+                note("在聊天框或文档里按「改写当前输入框」（默认 ⌃⌥⌘T）：自动全选、复制，中文和中英混合译成英文，英文纠错并改得自然简洁，然后替换原文，不会按回车发送。也可以先复制文字，再按「改写剪贴板内容」（默认 ⌃⇧⌘C）粘贴到光标处。使用上面选的翻译服务；链接和代码原样保留；最多 10,000 字，30 秒超时。需要「辅助功能」权限。")
             }
 
             Section("截图翻译") {
@@ -120,6 +173,20 @@ struct SettingsView: View {
                               pane: "Privacy_ScreenCapture")
             }
 
+            Section("更新") {
+                LabeledContent("当前版本", value: Updater.shared.versionDescription)
+                if Updater.shared.isAvailable {
+                    Toggle("自动检查更新（每天一次）", isOn: Binding(
+                        get: { Updater.shared.automaticallyChecksForUpdates },
+                        set: { Updater.shared.automaticallyChecksForUpdates = $0 }))
+                    Button("立即检查更新") { Updater.shared.checkForUpdates() }
+                        .disabled(!Updater.shared.canCheckForUpdates)
+                    note("有新版本时会弹窗显示更新说明，点「安装」后自动下载、校验签名、替换并重启。设置、生词本、历史、资料库和 API Key 都会保留。")
+                } else {
+                    note("这是本机编译的开发版，不检查更新。")
+                }
+            }
+
             Section {
                 Toggle("登录时自动启动", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in
@@ -132,8 +199,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 640)
-        .onAppear { apiKey = Keychain.apiKey(for: provider) ?? "" }
+        .frame(minWidth: 520, minHeight: 640)
+        .onAppear { apiKey = APIKeyStore.apiKey(for: provider) ?? "" }
         .onReceive(timer) { _ in
             accessibilityGranted = AXIsProcessTrusted()
             screenGranted = CGPreflightScreenCaptureAccess()
@@ -141,13 +208,20 @@ struct SettingsView: View {
     }
 
     private func keyField(prompt: String) -> some View {
-        SecureField("API Key", text: $apiKey, prompt: Text(prompt))
-            .onChange(of: apiKey) { _, value in
-                // 切换服务时 apiKey 会被重新载入，只在内容确实变化时写钥匙串。
-                if value != (Keychain.apiKey(for: provider) ?? "") {
-                    Keychain.setAPIKey(value, for: provider)
+        VStack(alignment: .leading, spacing: 4) {
+            SecureField("API Key", text: $apiKey, prompt: Text(prompt))
+                .onChange(of: apiKey) { _, value in
+                    // 切换服务时 apiKey 会被重新载入，只在内容确实变化时写文件。
+                    if value != (APIKeyStore.apiKey(for: provider) ?? "") {
+                        APIKeyStore.setAPIKey(value, for: provider)
+                    }
                 }
+            if APIKeyStore.needsReentry.contains(provider) && apiKey.isEmpty {
+                Text("以前保存在钥匙串里的 Key 没能自动搬过来（系统要求确认），请重新填写一次。")
+                    .font(Theme.caption)
+                    .foregroundStyle(Theme.repeated)
             }
+        }
     }
 
     private func urlField(prompt: String? = nil) -> some View {
@@ -159,6 +233,32 @@ struct SettingsView: View {
         StoredField("模型", key: Settings.modelKey(for: provider),
                     prompt: Settings.defaultModel(for: provider),
                     presets: Settings.presetModels(for: provider))
+    }
+
+    private func headersField() -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("额外请求头（每行「名称: 值」，认证头由 API Key 管理）")
+                .font(Theme.caption)
+                .foregroundStyle(.secondary)
+            HeadersEditor(key: Settings.extraHeadersKey(for: provider))
+        }
+    }
+
+    private func instructionsEditor(_ title: String, text: Binding<String>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(Theme.caption).foregroundStyle(.secondary)
+            TextEditor(text: text)
+                .font(Theme.body)
+                .frame(height: 48)
+                .scrollContentBackground(.hidden)
+                .padding(4)
+                .background(RoundedRectangle(cornerRadius: Theme.radiusSmall).fill(Theme.surface))
+                .overlay(alignment: .topLeading) {
+                    if text.wrappedValue.isEmpty {
+                        Text(placeholder).font(Theme.body).foregroundStyle(.tertiary).padding(9).allowsHitTesting(false)
+                    }
+                }
+        }
     }
 
     private func note(_ text: String) -> some View {
@@ -183,6 +283,22 @@ struct SettingsView: View {
                 Text("已授权").foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+/// 多行请求头编辑框，直接读写某个 UserDefaults 键。
+private struct HeadersEditor: View {
+    @AppStorage private var value: String
+
+    init(key: String) { _value = AppStorage(wrappedValue: "", key) }
+
+    var body: some View {
+        TextEditor(text: $value)
+            .font(.system(size: 12, design: .monospaced))
+            .frame(height: 44)
+            .scrollContentBackground(.hidden)
+            .padding(4)
+            .background(RoundedRectangle(cornerRadius: Theme.radiusSmall).fill(Theme.surface))
     }
 }
 

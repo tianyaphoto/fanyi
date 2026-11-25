@@ -14,6 +14,10 @@ final class Coordinator {
     private var capturing = false
 
     func start() {
+        if let mode = PolishSelfTest.mode {
+            PolishSelfTest.run(mode)
+            return
+        }
         if let url = EvalMode.casesURL {
             EvalMode.run(url)
             return
@@ -40,6 +44,11 @@ final class Coordinator {
         monitor.onActivity = { [weak self] in self?.icon.hide() }
         monitor.start()
 
+        // 点击自测要真实的全局监听，但不注册快捷键（免得和正在用的 App 抢）
+        if let button = ClickSelfTest.button {
+            ClickSelfTest.run(button, popup: popup)
+            return
+        }
         ShortcutCenter.shared.handler = { [weak self] action in self?.perform(action) }
         ShortcutCenter.shared.apply()
     }
@@ -49,6 +58,8 @@ final class Coordinator {
         case .selection: translateSelection()
         case .screenshot: captureAndTranslate()
         case .input: showInput()
+        case .polishField: PolishCoordinator.shared.polishField()
+        case .polishClipboard: PolishCoordinator.shared.polishClipboard()
         }
     }
 

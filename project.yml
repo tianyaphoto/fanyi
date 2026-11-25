@@ -3,23 +3,36 @@ options:
   bundleIdPrefix: com.local
   deploymentTarget:
     macOS: "14.0"
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.1
 targets:
   Fanyi:
     type: application
     platform: macOS
     sources: [Sources, Resources]
+    dependencies:
+      - package: Sparkle
     info:
       path: Info.plist
       properties:
         CFBundleDisplayName: 翻译神器
-        CFBundleShortVersionString: "1.1"
-        CFBundleVersion: "2"
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         NSHumanReadableCopyright: ""
+        # 自动更新（Sparkle）：更新信息放在 GitHub Pages 主页，安装包在 GitHub Release
+        SUFeedURL: https://tianyaphoto.github.io/fanyi/appcast.xml
+        SUPublicEDKey: xAKDG7ymGAvqy8jrceLh/Z9KuLf5VT3L7SnPKwoJOm0=
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.local.fanyi
         PRODUCT_NAME: Fanyi
+        MARKETING_VERSION: "1.2"
+        CURRENT_PROJECT_VERSION: "3"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Manual

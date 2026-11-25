@@ -17,7 +17,8 @@ if [[ -z "$IDENTITY" ]]; then
   IDENTITY=$(echo "$IDENTITIES" | awk 'NR==1 && $2 ~ /^[0-9A-F]{40}$/ {print $2}')
 fi
 if [[ -n "$IDENTITY" ]]; then
-  codesign --force --options runtime --sign "$IDENTITY" "$APP"
+  # --deep：连同内嵌的 Sparkle.framework（含更新器和 XPC 服务）一起签，否则开了运行时加固后加载会失败
+  codesign --force --deep --options runtime --sign "$IDENTITY" "$APP"
 fi
 if [[ "${1:-}" == "install" ]]; then
   pkill -x Fanyi 2>/dev/null || true

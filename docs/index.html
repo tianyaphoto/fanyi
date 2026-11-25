@@ -140,6 +140,7 @@ footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--f
     <a class="brand" href="./"><img class="logo" src="assets/favicon.png" width="30" height="30" alt="">翻译神器</a>
     <nav>
       <a href="#features" class="hide-s">功能</a>
+      <a href="#polish" class="hide-s">一键改写</a>
       <a href="#scenes" class="hide-s">场景与资料库</a>
       <a href="#install">安装</a>
       <a href="https://github.com/tianyaphoto/fanyi">GitHub</a>
@@ -175,9 +176,43 @@ footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--f
       <div class="card"><h3>划词翻译</h3><p>在任意 App 里选中文字，鼠标旁出现小图标，点一下就翻译；也可以按 <span class="kbd">⌥D</span>。Chrome、VS Code、Google 文档也能取词。</p></div>
       <div class="card"><h3>截图翻译</h3><p>按 <span class="kbd">⌥S</span> 框选屏幕区域，本机识别文字再翻译；打开「看图翻译」后表格、公式、手写体效果更好。</p></div>
       <div class="card"><h3>输入翻译</h3><p>按 <span class="kbd">⌥A</span> 弹出输入框，像 Spotlight 一样打字回车就翻译。</p></div>
+      <div class="card"><h3>只翻译，不回答</h3><p>要翻译的内容即使是问题或指令，也只会被翻译，不会被回答或执行。翻完自动检查，不像译文就重翻一次。</p></div>
       <div class="card"><h3>结合语境</h3><p>划词时同时读取所在的原句，先告诉你这个词在这句话里的具体意思。查单词时系统词典的释义即时出现。</p></div>
       <div class="card"><h3>长文本不挤</h3><p>整段、多段文字自动用大浮窗，原文可以折叠，译完能逐段对照；浮窗会避开选中的文字，不挡住原文。</p></div>
+      <div class="card"><h3>一键改写</h3><p>按 <span class="kbd">⌃⌥⌘T</span>，把输入框里的中文译成英文、英文改得地道，直接替换原文。</p></div>
       <div class="card"><h3>生词本与历史</h3><p>一键收藏单词和当时的原句、来源；同一个词查到第二次会提醒你，方便发现该记的生词。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="polish">
+  <div class="wrap two">
+    <div>
+      <h2>一键改写</h2>
+      <p class="sub">在聊天框或文档里写完一段话，按 <span class="kbd">⌃⌥⌘T</span>：中文和中英混合自动译成英文，英文自动纠正拼写和语法、改得自然简洁，然后直接替换原文。不会帮你按回车发送，检查后自己发。</p>
+      <ul class="clean">
+        <li><b>剪贴板也行</b>：先复制文字，按 <span class="kbd">⌃⇧⌘C</span>，改写结果粘贴到光标处。</li>
+        <li><b>只改写，不回答</b>：问句改完还是问句，请求改完还是请求，不会替你回答或照着去做。</li>
+        <li><b>不改坏内容</b>：链接、代码原样保留；默认英式拼写（finalised、colour），可改美式；可以加自己的要求。</li>
+        <li><b>不粘错地方</b>：粘贴前确认还是同一个输入框、你没在打字或点击；能读取的输入框会回读确认替换正确，有疑问就提示你手动处理。</li>
+        <li><b>诊断日志</b>：每一步是否完成都有记录，不记录原文和结果。</li>
+      </ul>
+    </div>
+    <div>
+      <pre><code># 写的是
+你明天有空吗？想跟你对一下 Q4 的规划。
+
+# 按 ⌃⌥⌘T 之后
+Are you available tomorrow? I'd like to
+align on the Q4 plan.
+
+# 写的是
+i think we should finalize the design
+today, what do u think
+
+# 按 ⌃⌥⌘T 之后
+I think we should finalise the design
+today. What do you think?</code></pre>
     </div>
   </div>
 </section>
@@ -230,19 +265,20 @@ SLA = 服务等级协议</code></pre>
         <div class="step"><div><h3>下载并解压</h3><p><a href="https://github.com/tianyaphoto/fanyi/releases/latest/download/Fanyi.zip">下载 Fanyi.zip</a>，双击解压，把 Fanyi.app 拖进「应用程序」文件夹。</p></div></div>
         <div class="step"><div><h3>打开</h3><p>App 已经过苹果公证，双击就能打开。它常驻在屏幕右上角的菜单栏，图标是一个对话气泡。</p></div></div>
         <div class="step"><div><h3>选翻译服务</h3><p>第一次运行会打开设置。选一个翻译服务并填 API Key；装了 Claude Code 的话可以直接用 <code>claude -p</code>，不用 Key。</p></div></div>
-        <div class="step"><div><h3>授予权限</h3><p>划词需要「辅助功能」权限，截图翻译需要「屏幕录制」权限。设置窗口的「权限」一栏有跳转按钮。</p></div></div>
+        <div class="step"><div><h3>授予权限</h3><p>划词和一键改写需要「辅助功能」权限，截图翻译需要「屏幕录制」权限。设置窗口的「权限」一栏有跳转按钮。</p></div></div>
       </div>
       <div class="note">想自己编译：<code>brew install xcodegen</code>，克隆仓库后运行 <code>./build.sh install</code>。</div>
     </div>
     <div>
       <h2>翻译服务</h2>
-      <p class="sub">每个服务的 Key、地址、模型分开保存，API Key 存在系统钥匙串里。</p>
+      <p class="sub">每个服务的 Key、地址、模型分开保存，API Key 只保存在你本机。</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>服务</th><th>说明</th></tr></thead>
           <tbody>
             <tr><td>Claude API</td><td>默认 claude-opus-5-5，想更快更省可以换 haiku</td></tr>
             <tr><td>AWS Bedrock</td><td>通过 Bedrock 使用 Claude</td></tr>
+            <tr><td>Bedrock 网关</td><td>企业网关或代理，x-api-key 或 Bearer，可加请求头</td></tr>
             <tr><td>OpenAI API</td><td>Chat Completions，默认 gpt-5-mini</td></tr>
             <tr><td>DeepSeek</td><td>默认 deepseek-chat</td></tr>
             <tr><td>通义千问</td><td>阿里云百炼，默认 qwen-plus</td></tr>
@@ -258,7 +294,7 @@ SLA = 服务等级协议</code></pre>
 <section>
   <div class="wrap">
     <h2>隐私</h2>
-    <p class="sub" style="margin-bottom:0">生词本、查词历史、资料库都只保存在本机。要翻译的文字、划词时读取到的原句，以及从资料库检索出的相关片段和命中的术语，会发送给你选择的翻译服务；不会发给其他任何地方。</p>
+    <p class="sub" style="margin-bottom:0">生词本、查词历史、资料库、API Key 都只保存在本机（API Key 是明文文件，只有你的账号能读写）。一键改写时，要改写的文字会发送给你选择的服务，原文和结果只在内存里，退出即清除。要翻译的文字、划词时读取到的原句，以及从资料库检索出的相关片段和命中的术语，会发送给你选择的翻译服务；不会发给其他任何地方。</p>
   </div>
 </section>
 

@@ -20,6 +20,8 @@ enum EvalMode {
         var forbid: [String] = []
         var question: Bool? = nil
         var lines: Int? = nil
+        /// "polish" = 一键改写；默认是划词翻译
+        var mode: String? = nil
     }
 
     struct Outcome: Codable {
@@ -52,9 +54,14 @@ enum EvalMode {
                         let start = Date()
                         var output = "", attempts = 0, problems: [String] = []
                         do {
-                            let result = try await Translator.translate(text: item.text, scene: scene)
-                            output = result.text
-                            attempts = result.attempts
+                            if item.mode == "polish" {
+                                output = try await PolishService.process(item.text)
+                                attempts = 1
+                            } else {
+                                let result = try await Translator.translate(text: item.text, scene: scene)
+                                output = result.text
+                                attempts = result.attempts
+                            }
                         } catch {
                             problems.append("出错：\(error.localizedDescription)")
                         }

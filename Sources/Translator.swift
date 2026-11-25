@@ -145,19 +145,44 @@ enum Translator {
                     let request = makeRequest(text: text, context: context, image: image, scene: scene,
                                               retrieval: retrieval, plan: plan ?? TranslationPlan(text),
                                               correction: correction)
-                    let emit: (String) -> Void = { continuation.yield($0) }
-                    let provider = Settings.provider
-                    switch provider.kind {
-                    case .anthropic: try await runClaudeAPI(request, provider: provider, onText: emit)
-                    case .openAICompatible: try await runOpenAI(request, provider: provider, onText: emit)
-                    case .cli: try await runClaudeCLI(request, onText: emit)
-                    }
+                    try await run(request) { continuation.yield($0) }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// 按设置里选的服务发出请求，文字逐段交给 onText。
+    static func run(_ request: Request, onText: (String) -> Void) async throws {
+        let provider = Settings.provider
+        switch provider.kind {
+        case .anthropic: try await runClaudeAPI(request, provider: provider, onText: onText)
+        case .openAICompatible: try await runOpenAI(request, provider: provider, onText: onText)
+        case .bedrockInvoke: try await runBedrockInvoke(request, provider: provider, onText: onText)
+        case .cli: try await runClaudeCLI(request, onText: onText)
+        }
+    }
+
+    /// 一次性取回完整结果，超时抛错（一键改写用：不流式、不重试）。
+    static func complete(_ request: Request, timeout: TimeInterval) async throws -> String {
+        try await withThrowingTaskGroup(of: String?.self) { group in
+            group.addTask {
+                var output = ""
+                try await run(request) { output += $0 }
+                return output
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(timeout))
+                return nil
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next(), let output = first else {
+                throw TranslateError(message: "模型服务 \(Int(timeout)) 秒内没有返回，已取消。")
+            }
+            return output
         }
     }
 
@@ -250,13 +275,14 @@ enum Translator {
 
     private static func runOpenAI(_ input: Request, provider: Provider, onText: (String) -> Void) async throws {
         // 自定义服务（例如本机的 Ollama）可以不需要 API Key
-        let apiKey = provider == .custom ? (Keychain.apiKey(for: provider) ?? "") : try requireKey(provider)
+        let apiKey = provider == .custom ? (APIKeyStore.apiKey(for: provider) ?? "") : try requireKey(provider)
         let base = normalized(Settings.baseURL(for: provider))
         let model = Settings.model(for: provider)
         guard !base.isEmpty, !model.isEmpty else {
             throw TranslateError(message: "还没有填写 \(provider.title) 的 API 地址和模型。", needsSetup: true)
         }
-        guard let url = URL(string: base + "/chat/completions"), url.host != nil else {
+        let endpoint = base.hasSuffix("/chat/completions") ? base : base + "/chat/completions"
+        guard let url = URL(string: endpoint), url.host != nil else {
             throw TranslateError(message: "API 地址无效：\(base)", needsSetup: true)
         }
         var content: Any = input.text
@@ -278,6 +304,7 @@ enum Translator {
         request.timeoutInterval = 120
         if !apiKey.isEmpty { request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyExtraHeaders(to: &request, provider: provider)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         try await sse(request) { event in
@@ -293,6 +320,68 @@ enum Translator {
             case "content_filter": throw TranslateError(message: "内容被服务方的安全过滤拦截。")
             default: break
             }
+        }
+    }
+
+    // MARK: - Bedrock 网关（InvokeModel 格式，不做 AWS 签名）
+
+    /// 通过企业网关或代理调用 Bedrock 上的 Claude：POST {base}/model/{模型ID}/invoke，
+    /// 认证用 x-api-key 或 Bearer。一次性返回，只取文字块（不展示思考内容）。
+    private static func runBedrockInvoke(_ input: Request, provider: Provider, onText: (String) -> Void) async throws {
+        let apiKey = try requireKey(provider)
+        let base = normalized(Settings.baseURL(for: provider))
+        let model = Settings.model(for: provider)
+        guard !base.isEmpty, !model.isEmpty else {
+            throw TranslateError(message: "还没有填写 Bedrock 网关的地址和模型 ID。", needsSetup: true)
+        }
+        let modelPath = model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(.init(charactersIn: "/"))) ?? model
+        let endpoint = base.contains("/invoke") ? base : "\(base)/model/\(modelPath)/invoke"
+        guard let url = URL(string: endpoint), url.host != nil else {
+            throw TranslateError(message: "API 地址无效：\(endpoint)", needsSetup: true)
+        }
+        let body: [String: Any] = [
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 8000,
+            "system": input.system,
+            "messages": exampleMessages(input) + [["role": "user", "content": claudeContent(input)]],
+        ]
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 120
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if Settings.bedrockGatewayAuth == .bearer {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        } else {
+            request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        }
+        applyExtraHeaders(to: &request, provider: provider)
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await HTTP.session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 200 else {
+            throw TranslateError(message: describeHTTPError(status: status, body: String(data: data, encoding: .utf8) ?? ""))
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw TranslateError(message: "网关返回的不是 JSON。")
+        }
+        switch json["stop_reason"] as? String {
+        case "refusal": throw TranslateError(message: "模型拒绝了这段内容。")
+        case "max_tokens": throw TranslateError(message: "响应被截断（超出输出长度上限）。")
+        default: break
+        }
+        let blocks = json["content"] as? [[String: Any]] ?? []
+        let text = blocks.filter { $0["type"] as? String == "text" }.compactMap { $0["text"] as? String }.joined()
+        guard !text.isEmpty else { throw TranslateError(message: "网关返回里没有文字内容。") }
+        onText(text)
+    }
+
+    /// 设置里填的额外请求头（每行「名称: 值」）。认证头由 API Key 管理，这里忽略。
+    private static func applyExtraHeaders(to request: inout URLRequest, provider: Provider) {
+        for (name, value) in Settings.extraHeaders(for: provider)
+            where !["authorization", "x-api-key"].contains(name.lowercased()) {
+            request.setValue(value, forHTTPHeaderField: name)
         }
     }
 
@@ -337,6 +426,15 @@ enum Translator {
         stdin.fileHandleForWriting.write(stdinData)
         try? stdin.fileHandleForWriting.close()
 
+        // 看门狗：claude 偶尔会卡住不返回（实测 37 次里出现过 3 次），90 秒后结束进程，免得浮窗一直转圈
+        let watchdog = CLIWatchdog()
+        let timer = Task.detached {
+            try? await Task.sleep(for: .seconds(90))
+            guard !Task.isCancelled, process.isRunning else { return }
+            watchdog.fired = true
+            process.terminate()
+        }
+        defer { timer.cancel() }
         try await withTaskCancellationHandler {
             var gotText = false
             for try await line in stdout.fileHandleForReading.bytes.lines {
@@ -356,6 +454,9 @@ enum Translator {
                 }
             }
             process.waitUntilExit()
+            if watchdog.fired {
+                throw TranslateError(message: "claude 90 秒内没有返回，已停止。可以点「重试」，或在设置里换成直接调用 API。")
+            }
             if !gotText && !Task.isCancelled {
                 let errData = stderr.fileHandleForReading.availableData
                 let detail = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -369,7 +470,7 @@ enum Translator {
     // MARK: - 公共
 
     private static func requireKey(_ provider: Provider) throws -> String {
-        guard let key = Keychain.apiKey(for: provider), !key.isEmpty else {
+        guard let key = APIKeyStore.apiKey(for: provider), !key.isEmpty else {
             throw TranslateError(message: "还没有配置 \(provider.title) 的 API Key。", needsSetup: true)
         }
         return key
@@ -381,7 +482,7 @@ enum Translator {
 
     /// 发送请求并逐条解析 SSE 的 data 行。
     private static func sse(_ request: URLRequest, onEvent: ([String: Any]) throws -> Void) async throws {
-        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        let (bytes, response) = try await HTTP.session.bytes(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else {
             var raw = ""
@@ -412,6 +513,21 @@ enum Translator {
         default: return "请求失败（\(status)）：\(detail)"
         }
     }
+}
+
+/// claude -p 看门狗的状态（跨线程读写，只用一个布尔值）。
+private final class CLIWatchdog: @unchecked Sendable {
+    var fired = false
+}
+
+/// 网络请求统一用这个会话：不跟随 HTTP 重定向（防止 API Key 被转发到别的地址）。
+enum HTTP {
+    private final class NoRedirect: NSObject, URLSessionTaskDelegate {
+        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest) async -> URLRequest? { nil }
+    }
+
+    static let session = URLSession(configuration: .default, delegate: NoRedirect(), delegateQueue: nil)
 }
 
 /// 查找本机的 claude 可执行文件（GUI App 没有终端的 PATH，需要自己找）。

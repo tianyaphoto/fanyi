@@ -5,6 +5,8 @@ import AppKit
 struct FanyiApp: App {
     static let isDevRun = ProcessInfo.processInfo.environment["FANYI_EVAL"] != nil
         || ProcessInfo.processInfo.environment["FANYI_DEMO_DIR"] != nil
+        || ProcessInfo.processInfo.environment["FANYI_POLISH_SELFTEST"] != nil
+        || ProcessInfo.processInfo.environment["FANYI_CLICK_SELFTEST"] != nil
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
@@ -22,16 +24,32 @@ struct FanyiApp: App {
 
 private struct MenuContent: View {
     private var shortcuts: ShortcutCenter { .shared }
+    private var polish: PolishCoordinator { .shared }
 
     var body: some View {
         Button("输入翻译" + suffix(.input)) { Coordinator.shared.showInput() }
         Button("截图翻译" + suffix(.screenshot)) { Coordinator.shared.captureAndTranslate() }
         Text(shortcuts.display(for: .selection).map { "划词后点击小图标，或按 \($0) 翻译选中文字" } ?? "划词后点击小图标翻译选中文字")
         Divider()
+        Button("改写当前输入框" + suffix(.polishField)) { PolishCoordinator.shared.polishField() }
+        Button("改写剪贴板内容" + suffix(.polishClipboard)) { PolishCoordinator.shared.polishClipboard() }
+        if polish.isRunning {
+            Button("取消改写") { polish.cancel() }
+        }
+        Button("复制上次改写结果") { polish.copyLastResult() }
+            .disabled(polish.lastResult == nil)
+        Button("复制上次改写原文") { polish.copyLastOriginal() }
+            .disabled(polish.lastOriginal == nil)
+        Button("诊断日志…") { Windows.showDiagnostics() }
+        Divider()
         Button("生词本") { Windows.showVocabulary() }
         Button("查词历史") { Windows.showHistory() }
         Button("场景与资料库…") { Windows.showLibrary() }
         Button("设置…") { Windows.showSettings() }
+        if Updater.shared.isAvailable {
+            Button("检查更新…") { Updater.shared.checkForUpdates() }
+                .disabled(!Updater.shared.canCheckForUpdates)
+        }
         Divider()
         Button("退出") { NSApp.terminate(nil) }
     }
@@ -44,8 +62,10 @@ private struct MenuContent: View {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Settings.registerDefaults()
+        if !FanyiApp.isDevRun { APIKeyStore.migrateFromKeychain() }
         ensureEditMenu()
         Coordinator.shared.start()
+        Updater.shared.start()
         if !Settings.provider.isConfigured && !FanyiApp.isDevRun {
             Windows.showSettings()
         }
@@ -92,8 +112,14 @@ enum Windows {
         }
     }
 
+    static func showDiagnostics() {
+        show(id: "diagnostics", title: "诊断日志", size: NSSize(width: 640, height: 460), resizable: true) {
+            DiagnosticsView()
+        }
+    }
+
     static func showSettings() {
-        show(id: "settings", title: "翻译神器设置", size: NSSize(width: 480, height: 640), resizable: false) {
+        show(id: "settings", title: "翻译神器设置", size: NSSize(width: 520, height: 700), resizable: true) {
             SettingsView()
         }
     }

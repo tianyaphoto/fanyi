@@ -19,7 +19,18 @@
 - **浮窗操作**：朗读原文、复制译文、固定浮窗，按 Esc 关闭。长文本自动用大浮窗，原文可折叠，译完后可以逐段「对照」；浮窗会避开选中的文字，不挡住原文。
 - **翻译场景**：内置通用、文档、技术、学术、邮件与聊天、合同与条款六个场景，每个场景有自己的翻译要求（例如文档保留标题和列表结构、术语前后一致；技术内容保留代码和命令）。按当前 App、窗口标题和网址自动选择，浮窗里可以临时切换，或记住「以后这个网站都用这个场景」。要求和识别关键词都能改，也能新建自己的场景。
 - **资料库与术语表**：把项目文档、产品说明、以前的译文（文本、Markdown、PDF、Word、RTF、HTML）加进资料库，翻译时在本机检索出最相关的几段作为参考；术语表里的词必须按给定译法翻译。浮窗会显示这次参考了哪些内容。
+- **一键改写（输入框）**：在聊天框或文档里按 `⌃⌥⌘T`，自动全选、复制，中文和中英混合译成英文，英文纠正拼写语法、改成自然简洁的工作表达，然后用 `⌘V` 替换原文；不会按回车发送。也可以先复制文字，按 `⌃⇧⌘C` 把改写结果粘贴到光标处。默认英式拼写，可改美式；可以分别给“译成英文”和“英文润色”加自定义要求。详见下面「一键改写」。
 - **Google 文档**：Google 文档、幻灯片、表格的正文画在画布上，读不到辅助功能文字，会自动改用拷贝取词。
+
+## 一键改写
+
+- **两个快捷键**（都可以在设置里改）：`⌃⌥⌘T` 改写当前输入框（全选 → 复制 → 改写 → 替换）；`⌃⇧⌘C` 改写剪贴板里的文字，粘贴到光标处。按完快捷键请松手，等结果自动替换。
+- **安全**：先记下当时的应用、窗口和输入框；粘贴前确认目标没变、等待期间没有打字或点击、剪贴板没被换掉，否则不自动粘贴，结果留在剪贴板里由你手动粘贴。能读取输入框文字的应用（大多数原生应用和打开了辅助功能的 Electron 应用），粘贴后会回读整个输入框确认替换正确；读不到时会提示“无法确认”，避免重复粘贴。成功时不弹窗，出问题时在屏幕上方显示一条不抢焦点的短提示。
+- **不改坏内容**：链接、行内代码、代码块先换成占位符，改写后原样还原，占位符被模型改坏就不写入；空输入、复制失败、网络失败、超过 10,000 字、结果不像改写（不是英文、问句被回答）时，原文不动。同时只运行一个任务，30 秒超时，可以从菜单取消。
+- **菜单**：「复制上次改写结果」「复制上次改写原文」（原文和结果只在内存里，退出即清除）、「诊断日志…」（最近 250 条步骤记录：快捷键是否收到、全选和复制是否完成、HTTP 状态和耗时、为什么没自动粘贴；不记录原文、结果和密钥）。
+- **设置 → 一键改写**：英式 / 美式拼写、两类自定义要求、「测试连接」（用当前服务改写一句固定的中文，不碰剪贴板）。
+- 使用上面选择的翻译服务。用 `claude -p` 时每次要启动一次命令，改写一段话通常 10–25 秒；直接调 API 一般一两秒。
+- 需要「辅助功能」权限；需要目标输入框支持全选、复制和粘贴。任意第三方应用的输入框实现无法保证 100% 兼容。
 
 ## 翻译服务
 
@@ -29,13 +40,14 @@
 |---|---|---|
 | Claude API | Claude API Key | 默认模型 `claude-opus-5-5`，想更快更省可换成 `claude-haiku-5-5`。API 地址可改。 |
 | AWS Bedrock（Claude） | Amazon Bedrock API Key | 通过 Bedrock 使用 Claude，填区域和带 `anthropic.` 前缀的模型名，默认 `anthropic.claude-haiku-4-5`。短期 Key 最长 12 小时有效。 |
+| Bedrock 网关（Claude） | 网关地址、模型 ID、API Key | 企业网关或代理：请求 `地址/model/{模型ID}/invoke`，认证用 `x-api-key` 或 Bearer，可加额外请求头（如 `Send-Raw-Response-Header: true`）。不做 AWS SigV4 签名，不读取本机 AWS 凭据。 |
 | OpenAI API | OpenAI API Key | 使用 Chat Completions 接口，默认模型 `gpt-5-mini`。 |
 | DeepSeek | DeepSeek API Key | 默认模型 `deepseek-chat`。不能看图。 |
 | 通义千问 | 阿里云百炼 API Key | OpenAI 兼容接口，默认模型 `qwen-plus`。 |
 | 自定义（OpenAI 兼容） | API 地址和模型名 | Kimi、智谱、硅基流动、OpenRouter 等同格式的服务；本机的 Ollama 填 `http://localhost:11434/v1`，API Key 留空。 |
 | claude -p | 已安装并登录的 [Claude Code](https://claude.com/claude-code) | 不需要 API Key，使用你的 Claude 账号额度。每次翻译要启动一次命令，比直接调 API 慢 1–2 秒。 |
 
-每个服务的 API Key、地址和模型分开保存，切换服务不用重填。API Key 保存在 macOS 钥匙串中，不会写入任何文件。
+每个服务的 API Key、地址和模型分开保存，切换服务不用重填。API Key 以明文保存在本机 `~/Library/Application Support/Fanyi/` 下的密钥文件里（文件权限 600，仅本人可读写；不加密，不写入安装包或源码），翻译和一键改写共用。旧版本存在钥匙串里的 Key 会在首次启动时自动搬过来并从钥匙串删除；搬不过来时设置里会提示重新填写。自定义服务和 Bedrock 网关可以填额外请求头。所有请求都不跟随 HTTP 重定向。
 
 ## 系统要求
 
@@ -108,7 +120,7 @@ cd fanyi
 | 查词历史（最多 2000 条，可在设置中关闭） | `~/Library/Application Support/Fanyi/history.json` |
 | 资料库和术语表 | `~/Library/Application Support/Fanyi/knowledge.json` |
 | 翻译场景 | App 的偏好设置（`com.local.fanyi`） |
-| API Key | macOS 钥匙串（服务名 `com.local.fanyi`） |
+| API Key | `~/Library/Application Support/Fanyi/` 下的密钥文件（明文，权限 600） |
 
 要翻译的文字、划词时读取到的所在原句，以及从资料库检索出的相关片段和命中的术语，会发送给你选择的翻译服务。
 
@@ -125,6 +137,8 @@ Sources/
 ├── Knowledge.swift        # 资料库：导入、切段、BM25 检索、术语表
 ├── LibraryView.swift      # 「场景与资料库」窗口
 ├── Quality.swift          # 翻译方式判断、译文检查与自动重翻
+├── Polish.swift           # 一键改写：全选/复制/改写/粘贴/回读确认、链接代码保护
+├── Diagnostics.swift      # 一键改写的诊断日志、不抢焦点的短提示
 ├── Eval.swift             # 开发用：翻译评测（FANYI_EVAL=tests/translation-cases.json）
 ├── Debug.swift            # 开发用：演示数据截图（FANYI_DEMO_DIR）
 ├── LocalDictionary.swift  # macOS 系统词典查询
@@ -133,7 +147,8 @@ Sources/
 ├── History.swift          # 查词历史
 ├── Shortcuts.swift        # 快捷键配置与录制
 ├── HotKeys.swift          # 全局快捷键注册（Carbon）
-├── Settings.swift         # 设置项与钥匙串
+├── Settings.swift         # 设置项
+├── APIKeyStore.swift      # API Key 的本机明文文件存储（含从旧钥匙串一次性迁移）
 └── SettingsView.swift     # 设置界面
 Resources/Assets.xcassets  # App 图标、菜单栏图标（由 tools/make-icons.sh 从 design/*.svg 生成）
 project.yml                # XcodeGen 工程描述
