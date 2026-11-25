@@ -10,8 +10,12 @@ struct FanyiApp: App {
 
     var body: some Scene {
         // 评测、演示截图模式（开发用）不在菜单栏放图标，免得和正在用的 App 并排出现两个
-        MenuBarExtra("翻译神器", systemImage: "character.bubble", isInserted: .constant(!Self.isDevRun)) {
+        MenuBarExtra(isInserted: .constant(!Self.isDevRun)) {
             MenuContent()
+        } label: {
+            // 资源里标记为模板图：系统按浅色 / 深色菜单栏自动着色
+            Image("MenuBarIcon")
+                .accessibilityLabel("翻译神器")
         }
     }
 }

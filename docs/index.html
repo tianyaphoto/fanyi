@@ -4,8 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>翻译神器 Fanyi</title>
+<meta property="og:image" content="https://tianyaphoto.github.io/fanyi/assets/app-icon.png">
 <meta name="description" content="轻量的 macOS 菜单栏翻译工具：划词翻译、截图翻译、翻译场景、资料库与术语表、生词本。接 Claude、OpenAI、DeepSeek、通义千问等大模型。">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%232f6fed'/><text x='32' y='44' font-size='34' text-anchor='middle' fill='white' font-family='PingFang SC,sans-serif'>译</text></svg>">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/app-icon-256.png">
 <style>
 :root {
   --bg: #fbfbfd;
@@ -64,7 +66,8 @@ pre code { display: block; padding: 12px 14px; white-space: pre; }
 header.top { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--text); }
 .brand:hover { text-decoration: none; }
-.logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 16px; }
+.logo { width: 34px; height: 34px; display: block; }
+.hero-icon { width: 96px; height: 96px; display: block; margin: 0 0 18px -6px; }
 .top nav { display: flex; gap: 20px; font-size: 14px; }
 .top nav a { color: var(--muted); }
 
@@ -134,7 +137,7 @@ footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--f
 <body>
 <div class="wrap">
   <header class="top">
-    <a class="brand" href="./"><span class="logo">译</span>翻译神器</a>
+    <a class="brand" href="./"><img class="logo" src="assets/favicon.png" width="30" height="30" alt="">翻译神器</a>
     <nav>
       <a href="#features" class="hide-s">功能</a>
       <a href="#scenes" class="hide-s">场景与资料库</a>
@@ -145,6 +148,7 @@ footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--f
 
   <div class="hero">
     <div>
+      <img class="hero-icon" src="assets/app-icon-256.png" width="96" height="96" alt="翻译神器图标">
       <h1>看文档时，<br>划一下就懂。</h1>
       <p class="lead">翻译神器是一个轻量的 macOS 菜单栏翻译工具。划词、截图、输入都能翻译；按文档、技术、学术、聊天等场景用不同的译法，还能参考你自己的资料和术语表。翻译由你选择的大模型完成。</p>
       <div class="actions">
