@@ -38,14 +38,14 @@ Homepage: <https://tianyaphoto.github.io/fanyi/en.html> · Download: [latest rel
 
 | Service | You need | Notes |
 |---|---|---|
-| Claude API | Claude API key | Default `claude-opus-5-5`; `claude-haiku-5-5` is faster and cheaper. |
-| AWS Bedrock (Claude) | Amazon Bedrock API key | Region + model ID with the `anthropic.` prefix. |
+| Claude API | Claude API key, model name | Base URL can be changed. |
+| AWS Bedrock (Claude) | Amazon Bedrock API key, model ID | Region + model ID with the `anthropic.` prefix. |
 | Bedrock gateway (Claude) | Gateway URL, model ID, API key | Corporate gateway or proxy: `URL/model/{modelId}/invoke`, `x-api-key` or Bearer, extra headers. No SigV4 signing, no local AWS credentials. |
-| OpenAI API | OpenAI API key | Chat Completions, default `gpt-5-mini`. |
-| DeepSeek | DeepSeek API key | Default `deepseek-chat`; no vision. |
-| Qwen (通义千问) | Alibaba Cloud Model Studio key | OpenAI-compatible, default `qwen-plus`. |
+| OpenAI API | OpenAI API key, model name | Chat Completions. |
+| DeepSeek | DeepSeek API key, model name | No vision. |
+| Qwen (通义千问) | Alibaba Cloud Model Studio key, model name | OpenAI-compatible. |
 | Custom (OpenAI-compatible) | URL and model | Kimi, Zhipu, OpenRouter, local Ollama (`http://localhost:11434/v1`, no key) … |
-| claude -p | [Claude Code](https://claude.com/claude-code) installed and logged in | No API key; uses your Claude plan. Runs with `--safe-mode` so your own CLAUDE.md and hooks don't leak into translations. |
+| claude -p | [Claude Code](https://claude.com/claude-code) installed and logged in, model name (e.g. `sonnet`) | No API key; uses your Claude plan. Runs with `--safe-mode` so your own CLAUDE.md and hooks don't leak into translations. |
 
 API keys are stored per service in a plaintext file under `~/Library/Application Support/Fanyi/` (permissions 600, readable only by you; not encrypted, never bundled or committed), shared by translation and polish. HTTP redirects are never followed.
 
@@ -53,7 +53,7 @@ API keys are stored per service in a plaintext file under `~/Library/Application
 
 1. With Homebrew: `brew install --cask tianyaphoto/tap/fanyi`. Or download `Fanyi.zip` from the [latest release](https://github.com/tianyaphoto/fanyi/releases/latest), unzip, and drag `Fanyi.app` into Applications. Apple silicon and Intel; macOS 14 Sonoma or later.
 2. It is signed with a Developer ID and notarised by Apple — just double-click to open. A speech-bubble icon with 「译」 appears in the menu bar and settings open on first launch.
-3. Pick a translation service in settings and enter its key (not needed for `claude -p`).
+3. Pick a translation service in settings and enter its key and a model name (no key needed for `claude -p`). No model is preset; use the model name from your provider.
 4. Grant **Accessibility** (select-to-translate, one-key polish) and **Screen Recording** (screenshot translation) in System Settings → Privacy & Security; the settings window has shortcuts to both. Relaunch after granting Screen Recording.
 
 ## Default shortcuts

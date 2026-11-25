@@ -38,7 +38,7 @@ struct SettingsView: View {
                         keyField(prompt: "sk-ant-…")
                         urlField()
                         modelField()
-                        note("默认模型质量最好；想更快更省可以换成 claude-haiku-5-5。")
+                        note("模型名在 Anthropic 的模型列表里查，需要自己填写。")
                     case .bedrock:
                         keyField(prompt: "Amazon Bedrock API Key")
                         StoredField("区域", key: Settings.bedrockRegionKey, prompt: Settings.defaultBedrockRegion)
@@ -67,7 +67,7 @@ struct SettingsView: View {
                         keyField(prompt: "sk-…")
                         urlField()
                         modelField()
-                        note("阿里云百炼的 OpenAI 兼容接口。默认模型不能看图，截图翻译会先在本机识别文字。")
+                        note("阿里云百炼的 OpenAI 兼容接口。截图翻译会先在本机识别文字，再发给模型。")
                     case .custom:
                         keyField(prompt: "不需要时留空")
                         urlField(prompt: "https://…/v1")
@@ -252,8 +252,7 @@ struct SettingsView: View {
 
     private func modelField() -> some View {
         StoredField("模型", key: Settings.modelKey(for: provider),
-                    prompt: Settings.defaultModel(for: provider),
-                    presets: Settings.presetModels(for: provider))
+                    prompt: provider == .claudeCLI ? "必填，例如 sonnet" : "必填，服务商提供的模型名")
     }
 
     private func headersField() -> some View {
@@ -323,32 +322,20 @@ private struct HeadersEditor: View {
     }
 }
 
-/// 直接读写某个 UserDefaults 键的文本框，可带一个预设值菜单。
+/// 直接读写某个 UserDefaults 键的文本框。
 private struct StoredField: View {
     let title: String
     let prompt: String
-    let presets: [String]
     @AppStorage private var value: String
 
-    init(_ title: String, key: String, prompt: String, presets: [String] = []) {
+    init(_ title: String, key: String, prompt: String) {
         self.title = title
         self.prompt = prompt
-        self.presets = presets
         _value = AppStorage(wrappedValue: "", key)
     }
 
     var body: some View {
-        HStack {
-            TextField(title, text: $value, prompt: Text(prompt))
-            if !presets.isEmpty {
-                Menu("选择") {
-                    ForEach(presets, id: \.self) { name in
-                        Button(name) { value = name }
-                    }
-                }
-                .fixedSize()
-            }
-        }
+        TextField(title, text: $value, prompt: Text(prompt))
     }
 }
 

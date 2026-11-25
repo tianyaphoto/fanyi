@@ -3,6 +3,21 @@
     <channel>
         <title>Fanyi</title>
         <item>
+            <title>1.4</title>
+            <pubDate>Wed, 25 Nov 2026 18:52:48 +0800</pubDate>
+            <link>https://tianyaphoto.github.io/fanyi/</link>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>1.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h3>翻译神器 1.4</h3>
+<ul>
+  <li><b>不再预设模型</b>：所有翻译服务（包括 claude -p）都需要在设置里自己填写模型名，填服务商提供的模型名即可。</li>
+  <li><b>升级后请检查设置</b>：以前没改过模型、一直用默认模型的，升级后翻译会提示「还没有填写模型」，点「打开设置」填上就行。</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.4/Fanyi.zip" length="2763205" type="application/octet-stream" sparkle:edSignature="qMwvbsvPUjyl7qHxpXknPc6bLnJy3bZ/Jh5Eqrfw3SrAbmq1St7bA23TvNahF2i7wJdLSbTBYsKdiDoJ0uZrBA=="/>
+        </item>
+        <item>
             <title>1.3</title>
             <pubDate>Wed, 25 Nov 2026 17:58:30 +0800</pubDate>
             <link>https://tianyaphoto.github.io/fanyi/</link>

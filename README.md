@@ -41,14 +41,14 @@
 
 | 服务 | 需要什么 | 说明 |
 |---|---|---|
-| Claude API | Claude API Key | 默认模型 `claude-opus-5-5`，想更快更省可换成 `claude-haiku-5-5`。API 地址可改。 |
-| AWS Bedrock（Claude） | Amazon Bedrock API Key | 通过 Bedrock 使用 Claude，填区域和带 `anthropic.` 前缀的模型名，默认 `anthropic.claude-haiku-4-5`。短期 Key 最长 12 小时有效。 |
+| Claude API | Claude API Key、模型名 | API 地址可改。 |
+| AWS Bedrock（Claude） | Amazon Bedrock API Key、模型名 | 通过 Bedrock 使用 Claude，填区域和带 `anthropic.` 前缀的模型名。短期 Key 最长 12 小时有效。 |
 | Bedrock 网关（Claude） | 网关地址、模型 ID、API Key | 企业网关或代理：请求 `地址/model/{模型ID}/invoke`，认证用 `x-api-key` 或 Bearer，可加额外请求头（如 `Send-Raw-Response-Header: true`）。不做 AWS SigV4 签名，不读取本机 AWS 凭据。 |
-| OpenAI API | OpenAI API Key | 使用 Chat Completions 接口，默认模型 `gpt-5-mini`。 |
-| DeepSeek | DeepSeek API Key | 默认模型 `deepseek-chat`。不能看图。 |
-| 通义千问 | 阿里云百炼 API Key | OpenAI 兼容接口，默认模型 `qwen-plus`。 |
+| OpenAI API | OpenAI API Key、模型名 | 使用 Chat Completions 接口。 |
+| DeepSeek | DeepSeek API Key、模型名 | 不能看图。 |
+| 通义千问 | 阿里云百炼 API Key、模型名 | OpenAI 兼容接口。 |
 | 自定义（OpenAI 兼容） | API 地址和模型名 | Kimi、智谱、硅基流动、OpenRouter 等同格式的服务；本机的 Ollama 填 `http://localhost:11434/v1`，API Key 留空。 |
-| claude -p | 已安装并登录的 [Claude Code](https://claude.com/claude-code) | 不需要 API Key，使用你的 Claude 账号额度。每次翻译要启动一次命令，比直接调 API 慢 1–2 秒。 |
+| claude -p | 已安装并登录的 [Claude Code](https://claude.com/claude-code)、模型名（如 `sonnet`） | 不需要 API Key，使用你的 Claude 账号额度。每次翻译要启动一次命令，比直接调 API 慢 1–2 秒。 |
 
 每个服务的 API Key、地址和模型分开保存，切换服务不用重填。API Key 以明文保存在本机 `~/Library/Application Support/Fanyi/` 下的密钥文件里（文件权限 600，仅本人可读写；不加密，不写入安装包或源码），翻译和一键改写共用。旧版本存在钥匙串里的 Key 会在首次启动时自动搬过来并从钥匙串删除；搬不过来时设置里会提示重新填写。自定义服务和 Bedrock 网关可以填额外请求头。所有请求都不跟随 HTTP 重定向。
 
@@ -92,7 +92,7 @@ cd fanyi
 
 ## 首次使用
 
-1. **配置翻译服务**：在设置中选择服务；使用 API 的话，填入对应的 API Key。
+1. **配置翻译服务**：在设置中选择服务，填入模型名（不预设模型，填服务商提供的模型名）；使用 API 的话，再填对应的 API Key。
 2. **授予「辅助功能」权限**（划词翻译需要）：系统设置 → 隐私与安全性 → 辅助功能 → 允许「Fanyi」。
 3. **授予「屏幕录制」权限**（截图翻译需要）：系统设置 → 隐私与安全性 → 录屏与系统录音 → 允许「Fanyi」，然后重新打开 App。
 

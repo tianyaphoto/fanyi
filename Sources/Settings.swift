@@ -42,13 +42,13 @@ enum Provider: String, CaseIterable, Identifiable {
 
     /// 是否已经配置到可以直接使用。
     var isConfigured: Bool {
+        guard !Settings.model(for: self).isEmpty else { return false }
         switch self {
         case .claudeCLI: return true
         // 自定义服务可以没有 API Key（例如本机的 Ollama），但必须填地址和模型
-        case .custom: return !Settings.baseURL(for: self).isEmpty && !Settings.model(for: self).isEmpty
+        case .custom: return !Settings.baseURL(for: self).isEmpty
         case .bedrockGateway:
-            return !Settings.baseURL(for: self).isEmpty && !Settings.model(for: self).isEmpty
-                && !(APIKeyStore.apiKey(for: self) ?? "").isEmpty
+            return !Settings.baseURL(for: self).isEmpty && !(APIKeyStore.apiKey(for: self) ?? "").isEmpty
         default: return !(APIKeyStore.apiKey(for: self) ?? "").isEmpty
         }
     }
@@ -118,29 +118,6 @@ enum Settings {
         }
     }
 
-    static func defaultModel(for provider: Provider) -> String {
-        switch provider {
-        case .claude: return "claude-opus-5-5"
-        case .bedrock: return "anthropic.claude-haiku-4-5"
-        case .bedrockGateway: return ""
-        case .openai: return "gpt-5-mini"
-        case .deepseek: return "deepseek-chat"
-        case .qwen: return "qwen-plus"
-        case .custom: return ""
-        case .claudeCLI: return "haiku"
-        }
-    }
-
-    static func presetModels(for provider: Provider) -> [String] {
-        switch provider {
-        case .claude: return ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-2"]
-        case .bedrock: return ["anthropic.claude-haiku-4-5", "anthropic.claude-sonnet-5", "anthropic.claude-haiku-5-5",
-                               "anthropic.claude-sonnet-5-5", "anthropic.claude-opus-5-5"]
-        case .claudeCLI: return ["haiku", "sonnet", "opus"]
-        default: return []
-        }
-    }
-
     static func registerDefaults() {
         var defaults: [String: Any] = [
             providerKey: Provider.claude.rawValue,
@@ -154,7 +131,6 @@ enum Settings {
         ]
         for provider in Provider.allCases {
             defaults[baseURLKey(for: provider)] = defaultBaseURL(for: provider)
-            defaults[modelKey(for: provider)] = defaultModel(for: provider)
         }
         UserDefaults.standard.register(defaults: defaults)
     }
@@ -177,7 +153,8 @@ enum Settings {
     }
 
     static func model(for provider: Provider) -> String {
-        string(modelKey(for: provider), default: defaultModel(for: provider))
+        // 不内置默认模型：模型名都由用户自己填写。
+        string(modelKey(for: provider), default: "")
     }
 
     static var cliPath: String { string(cliPathKey, default: "") }

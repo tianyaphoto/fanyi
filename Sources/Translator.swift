@@ -242,7 +242,7 @@ enum Translator {
         guard let url = URL(string: base + "/v1/messages"), url.host != nil else {
             throw TranslateError(message: "API 地址无效：\(base)", needsSetup: true)
         }
-        let model = Settings.model(for: provider)
+        let model = try requireModel(provider)
 
         var body: [String: Any] = [
             "model": model,
@@ -301,10 +301,10 @@ enum Translator {
         // 自定义服务（例如本机的 Ollama）可以不需要 API Key
         let apiKey = provider == .custom ? (APIKeyStore.apiKey(for: provider) ?? "") : try requireKey(provider)
         let base = normalized(Settings.baseURL(for: provider))
-        let model = Settings.model(for: provider)
-        guard !base.isEmpty, !model.isEmpty else {
-            throw TranslateError(message: "还没有填写 \(provider.title) 的 API 地址和模型。", needsSetup: true)
+        guard !base.isEmpty else {
+            throw TranslateError(message: "还没有填写 \(provider.title) 的 API 地址。", needsSetup: true)
         }
+        let model = try requireModel(provider)
         let endpoint = base.hasSuffix("/chat/completions") ? base : base + "/chat/completions"
         guard let url = URL(string: endpoint), url.host != nil else {
             throw TranslateError(message: "API 地址无效：\(base)", needsSetup: true)
@@ -422,7 +422,7 @@ enum Translator {
             "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
             "--system-prompt", input.system,
             "--tools", "", "--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence",
-            "--model", Settings.model(for: .claudeCLI),
+            "--model", try requireModel(.claudeCLI),
         ]
         // 不加载用户自己的 CLAUDE.md、钩子、插件：否则用户写给编程助手的偏好会混进翻译（实测把
         // 「帮我写一封请假邮件」答成了「需要几个信息，先问第一个」）。老版本 claude 没有这个参数。
@@ -492,6 +492,15 @@ enum Translator {
     }
 
     // MARK: - 公共
+
+    /// 不内置默认模型，没填就提示去设置里填。
+    private static func requireModel(_ provider: Provider) throws -> String {
+        let model = Settings.model(for: provider)
+        guard !model.isEmpty else {
+            throw TranslateError(message: "还没有填写 \(provider.title) 的模型。请在设置里填写服务商提供的模型名。", needsSetup: true)
+        }
+        return model
+    }
 
     private static func requireKey(_ provider: Provider) throws -> String {
         guard let key = APIKeyStore.apiKey(for: provider), !key.isEmpty else {
