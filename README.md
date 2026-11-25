@@ -62,9 +62,13 @@ App 使用 Developer ID 签名并通过了苹果公证，双击即可打开。
 
 项目主页：<https://tianyaphoto.github.io/fanyi/>
 
+## 自动更新
+
+从 1.2 开始内置自动更新（[Sparkle](https://sparkle-project.org/)）：每天检查一次，有新版本时弹窗显示更新说明，点「安装」后自动下载、校验签名、替换并重启。菜单「检查更新…」可以手动检查，设置 →「更新」可以关闭自动检查。设置、生词本、历史、资料库和 API Key 都会保留。1.1 及更早的版本需要手动下载一次 1.2。
+
 ## 从源码编译
 
-发布版用 `TEAM_ID=<你的 Team ID> ./release.sh` 打包：归档、Developer ID 签名、提交公证、钉上公证票据，输出 `dist/Fanyi.zip`（需要 Developer ID Application 证书和 App Store Connect API 密钥，见脚本开头的说明）。自己用的话按下面编译即可。
+发布新版本：在 `project.yml` 里把 `MARKETING_VERSION` 和 `CURRENT_PROJECT_VERSION` 加一，写好更新说明（`release-notes/版本号.html`），运行 `TEAM_ID=<你的 Team ID> RELEASE_NOTES=release-notes/版本号.html ./release.sh`：归档、Developer ID 签名、提交公证、钉上公证票据，输出 `dist/Fanyi.zip`，并用 Sparkle 私钥签名、更新 `docs/appcast.xml`。然后提交并推送 `docs/appcast.xml`，建 GitHub Release `v版本号`、上传 `dist/Fanyi.zip`（文件名保持 `Fanyi.zip`）。需要 Developer ID Application 证书、App Store Connect API 密钥和钥匙串里的 Sparkle 私钥，见脚本开头的说明。自己用的话按下面编译即可。
 
 ```bash
 brew install xcodegen

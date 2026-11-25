@@ -1,0 +1,26 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Fanyi</title>
+        <item>
+            <title>1.2</title>
+            <pubDate>Wed, 25 Nov 2026 12:57:02 +0800</pubDate>
+            <link>https://tianyaphoto.github.io/fanyi/</link>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>1.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h3>翻译神器 1.2</h3>
+<ul>
+  <li><b>一键改写</b>：在聊天框或文档里按 ⌃⌥⌘T，中文自动译成英文、英文自动纠错润色，直接替换原文；也可以按 ⌃⇧⌘C 改写剪贴板内容。</li>
+  <li><b>只翻译，不回答</b>：要翻译的内容即使是问题或指令，也只会被翻译；翻完自动检查，不像译文会重翻一次。</li>
+  <li><b>自动更新</b>：以后有新版本会提示你，一键安装。</li>
+  <li><b>新图标</b>：App 图标和菜单栏图标换新。</li>
+  <li><b>Bedrock 网关</b>：可以通过企业网关调用 Bedrock 上的 Claude，支持自定义请求头。</li>
+  <li>修复：点浮窗上的朗读、固定按钮时浮窗被关掉；模拟按键后系统误以为 ⌘ 一直按着；浮窗左上角多出窗口按钮。</li>
+  <li>API Key 改为保存在本机的明文文件里（仅本人可读写），翻译和改写共用。</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.2/Fanyi.zip" length="2683740" type="application/octet-stream" sparkle:edSignature="8xfcG6t1qdoaF3TVW/zLW/Vhs174yor1Et83gdIrQtoXjZU0CPsu1gI9PoSs2JPPo+W3NF5ZpLKmK0Nf6A+fCQ=="/>
+        </item>
+    </channel>
+</rss>
