@@ -12,6 +12,8 @@ struct SettingsView: View {
     @AppStorage(PolishRules.spellingKey) private var spelling = PolishRules.Spelling.british
     @AppStorage(PolishRules.translateInstructionsKey) private var translateInstructions = ""
     @AppStorage(PolishRules.polishInstructionsKey) private var polishInstructions = ""
+    @AppStorage(Settings.primaryLanguageKey) private var primaryLanguage = Language.chinese.code
+    @AppStorage(Settings.secondaryLanguageKey) private var secondaryLanguage = Language.english.code
     @State private var testing = false
     @State private var testResult: (ok: Bool, message: String)?
 
@@ -83,6 +85,25 @@ struct SettingsView: View {
 
             Section {
                 note("所有服务的 API Key 都以明文保存在本机 ~/Library/Application Support/Fanyi/ 下（文件权限仅本人可读写），翻译和一键改写共用，不写入安装包或源码。")
+            }
+
+            Section("翻译语言") {
+                Picker("主要语言", selection: $primaryLanguage) {
+                    ForEach(Language.all) { Text($0.name).tag($0.code) }
+                }
+                HStack {
+                    Picker("另一种语言", selection: $secondaryLanguage) {
+                        ForEach(Language.all) { Text($0.name).tag($0.code) }
+                    }
+                    Button {
+                        (primaryLanguage, secondaryLanguage) = (secondaryLanguage, primaryLanguage)
+                    } label: { Image(systemName: "arrow.up.arrow.down") }
+                    .help("对调两种语言")
+                }
+                note("主要语言的文字译成另一种语言，另一种语言的文字译成主要语言，其它语言一律译成主要语言。默认是简体中文 ⇄ 英语。翻译浮窗上的「→ 语言」可以临时换成任意一种语言。一键改写不受影响，总是输出英文。")
+                if primaryLanguage == secondaryLanguage {
+                    note("两种语言相同时，所有文字都译成\(Language.find(primaryLanguage)?.name ?? "")。")
+                }
             }
 
             Section("划词翻译") {

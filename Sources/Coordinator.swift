@@ -168,11 +168,25 @@ final class Coordinator {
         return ImageAttachment(data: jpeg, mediaType: "image/jpeg")
     }
 
+    /// 识别语言：设置里的两种语言排前面（系统支持的话），再加上中文和英文。
+    nonisolated private static func ocrLanguages(_ request: VNRecognizeTextRequest) -> [String] {
+        let supported = (try? request.supportedRecognitionLanguages()) ?? []
+        let pair = Settings.languagePair
+        var result: [String] = []
+        for language in [pair.primary, pair.secondary] {
+            let match = supported.first { $0 == language.code }
+                ?? (language.isChinese ? nil : supported.first { $0.hasPrefix(language.code + "-") })
+            if let match, !result.contains(match) { result.append(match) }
+        }
+        for code in ["en-US", "zh-Hans", "zh-Hant"] where !result.contains(code) { result.append(code) }
+        return result
+    }
+
     nonisolated private static func recognizeText(in cgImage: CGImage) -> String {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
-        request.recognitionLanguages = ["en-US", "zh-Hans", "zh-Hant"]
+        request.recognitionLanguages = ocrLanguages(request)
         try? VNImageRequestHandler(cgImage: cgImage).perform([request])
         let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
         return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)

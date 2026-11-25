@@ -25,6 +25,10 @@ final class TranslationModel {
     var scene: TranslationScene = TranslationScene.defaults[0]
     /// 本次参考的术语和资料片段
     var retrieval: Retrieval = .empty
+    /// 浮窗上临时指定的目标语言；nil 表示按设置里的语言对自动决定。换一段新文字时清空。
+    var targetOverride: Language?
+    /// 本次实际译成的语言（看图翻译又没识别出文字时为 nil）
+    var targetLanguage: Language?
     /// 第几次翻译（第一次的输出不像译文时会自动重翻）
     var attempt = 1
     /// 两次都没通过检查时的问题说明
@@ -63,6 +67,13 @@ final class TranslationModel {
         if let lastCapture { translate(lastCapture, isRetry: true, sceneID: scene.id) }
     }
 
+    /// 换一个目标语言重新翻译（不算新的查询）。nil 表示恢复自动。
+    func changeTarget(_ language: Language?) {
+        guard let lastCapture, language != targetOverride || errorMessage != nil else { return }
+        targetOverride = language
+        translate(lastCapture, isRetry: true, sceneID: scene.id)
+    }
+
     /// 换一个场景重新翻译（不算新的查询）。
     func changeScene(_ id: String) {
         guard let lastCapture, id != scene.id || errorMessage != nil else { return }
@@ -81,6 +92,7 @@ final class TranslationModel {
         let text = capture.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || capture.image != nil else { return }
         cancel()
+        if !isRetry { targetOverride = nil }
         lastCapture = capture
         fromImage = capture.image != nil
         source = text
@@ -89,6 +101,8 @@ final class TranslationModel {
         sourceInfo = capture.source
         scene = sceneID.map { SceneStore.shared.scene(id: $0) } ?? SceneStore.shared.detect(for: capture.source)
         retrieval = text.isEmpty ? .empty : KnowledgeStore.shared.retrieve(text: text, context: capture.context, sceneID: scene.id)
+        targetLanguage = text.isEmpty && targetOverride == nil
+            ? nil : TranslationPlan(text, target: targetOverride).target
         attempt = 1
         qualityWarning = nil
         result = ""
@@ -106,7 +120,8 @@ final class TranslationModel {
         task = Task {
             do {
                 let outcome = try await Translator.translate(
-                    text: text, context: context, image: capture.image, scene: scene, retrieval: retrieval
+                    text: text, context: context, image: capture.image, scene: scene, retrieval: retrieval,
+                    target: targetOverride
                 ) { [weak self] partial, attempt in
                     guard let self, !Task.isCancelled else { return }
                     // 第二次开始时清空第一次的输出，并说明为什么重翻
@@ -156,6 +171,8 @@ final class TranslationModel {
         origin = nil
         sourceInfo = nil
         retrieval = .empty
+        targetLanguage = nil
+        targetOverride = nil
         attempt = 1
         qualityWarning = nil
         result = ""
@@ -202,8 +219,9 @@ final class TranslationModel {
         stopSpeaking()
         if wasSpeaking { return }
         let utterance = AVSpeechUtterance(string: source)
-        let isChinese = source.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
-        utterance.voice = AVSpeechSynthesisVoice(language: isChinese ? "zh-CN" : "en-US")
+        let language = LanguageDetector.detect(source, pair: Settings.languagePair) ?? .english
+        utterance.voice = AVSpeechSynthesisVoice(language: language.speechCode)
+            ?? AVSpeechSynthesisVoice(language: "en-US")
         speakingID = ObjectIdentifier(utterance)
         isSpeaking = true
         speaker.speak(utterance)
@@ -433,6 +451,7 @@ struct TranslationView: View {
     private var metaBar: some View {
         HStack(spacing: Theme.gapS) {
             sceneMenu
+            languageMenu
             if !model.retrieval.isEmpty {
                 Button { showReferences.toggle() } label: {
                     HStack(spacing: 4) {
@@ -503,6 +522,43 @@ struct TranslationView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("翻译场景：不同场景用不同的翻译要求，换一个会重新翻译")
+    }
+
+    private var languageMenu: some View {
+        Menu {
+            Section("译成") {
+                Button {
+                    model.changeTarget(nil)
+                } label: {
+                    let auto = "自动（\(Settings.languagePair.label)）"
+                    if model.targetOverride == nil { Label(auto, systemImage: "checkmark") } else { Text(auto) }
+                }
+                ForEach(Language.all) { language in
+                    Button {
+                        model.changeTarget(language)
+                    } label: {
+                        if model.targetOverride == language {
+                            Label(language.name, systemImage: "checkmark")
+                        } else {
+                            Text(language.name)
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("设置默认语言…") { Windows.showSettings() }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "globe")
+                Text("→ " + (model.targetLanguage?.name ?? "自动"))
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
+            }
+        }
+        .menuStyle(.button)
+        .buttonStyle(ChipStyle(active: model.targetOverride != nil))
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("译成哪种语言：默认按设置里的语言对自动决定，换一个会重新翻译")
     }
 
     private var referenceList: some View {

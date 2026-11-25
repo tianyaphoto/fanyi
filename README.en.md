@@ -6,7 +6,7 @@
 
 A lightweight macOS menu bar translator. Select text in any app and get a translation; translate screenshots; rewrite what you are typing into natural English with one shortcut; keep a vocabulary book. Translation is done by an LLM of your choice: Claude API, AWS Bedrock, OpenAI, DeepSeek, Qwen, any OpenAI-compatible service, or the Claude Code CLI on your Mac (`claude -p`).
 
-> **Language note:** the app's interface is in Chinese, and it translates between **English and Simplified Chinese** (Chinese → English, everything else → Chinese). One-key polish always produces English.
+> **Language note:** the app's interface is in Chinese. By default it translates between **English and Simplified Chinese**; in settings you can pick any two of 16 languages instead (Vietnamese ⇄ English, English ⇄ Korean, Japanese ⇄ Chinese …). One-key polish always produces English.
 
 Homepage: <https://tianyaphoto.github.io/fanyi/en.html> · Download: [latest release](https://github.com/tianyaphoto/fanyi/releases/latest)
 
@@ -15,6 +15,7 @@ Homepage: <https://tianyaphoto.github.io/fanyi/en.html> · Download: [latest rel
 - **Select to translate**: select text in any app and a small icon appears next to the pointer; click it, or press `⌥D`.
 - **Screenshot translation**: press `⌥S`, drag a box; text is recognised locally (Apple Vision) and translated. Optional "vision mode" sends the image itself to the model for tables, formulas and handwriting.
 - **Input translation**: press `⌥A`, type, press Return.
+- **Any two languages**: Simplified Chinese ⇄ English by default. In settings, choose a primary and a second language from 16 (Chinese, English, Japanese, Korean, Vietnamese, Thai, Indonesian, Malay, French, German, Spanish, Portuguese, Italian, Russian, Arabic …): each is translated into the other, and anything else goes into the primary language. The "→ language" chip in the popup overrides the target for one translation. Screenshot OCR follows the same languages.
 - **Words with context**: looking up a word shows the macOS dictionary instantly, then an AI explanation of what the word means *in the sentence you selected it from*.
 - **Translation scenes**: six built-in scenes — General, Document, Technical, Academic, Email & Chat, Contracts — each with its own rules (documents keep headings and lists; technical text keeps code, commands and identifiers; contracts translate *shall not* strictly). The scene is picked automatically from the current app, window title and URL (Google Docs → Document, GitHub → Technical, Slack → Chat …). Switch it in the popup, tell it to remember a site, edit the rules or add your own scenes.
 - **Knowledge base and glossary**: add your docs, product notes or past translations (text, Markdown, PDF, Word, RTF, HTML); relevant passages are retrieved locally (BM25) and sent as reference. Glossary terms (`underwriting = 核保`) are always translated your way. The popup shows what was referenced.

@@ -1,44 +1,59 @@
 import Foundation
 
-/// 在本地先判断好的翻译方式：单词还是句子、译成什么语言、原文是不是问句或指令。
+/// 在本地先判断好的翻译方式：单词还是句子、原文是什么语言、译成什么语言、原文是不是问句或指令。
 /// 这些不交给模型猜，直接写进提示词，也用来检查译文。
 struct TranslationPlan: Equatable, Sendable {
     enum Mode: Sendable { case term, passage }
 
-    enum Target: Sendable {
-        case chinese, english
-        var name: String { self == .chinese ? "简体中文" : "英文" }
-    }
-
     var mode: Mode
-    var target: Target
+    /// 原文的语言（本地判断；可能判断不出来）
+    var source: Language?
+    var target: Language
+    /// 目标语言是用户在浮窗上手动选的（不是按语言对自动决定的）
+    var forcedTarget: Bool
+    var pair: LanguagePair
     var isQuestion: Bool
     var isImperative: Bool
 
-    init(_ raw: String) {
+    init(_ raw: String, pair: LanguagePair = Settings.languagePair, target forced: Language? = nil) {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        target = TranslationCheck.cjkRatio(text) >= 0.3 ? .english : .chinese
+        self.pair = pair
+        let detected = LanguageDetector.detect(text, pair: pair)
+        source = detected
+        target = forced ?? pair.target(for: detected)
+        forcedTarget = forced != nil
 
-        let sentenceEnd: Set<Character> = [".", "?", "!", "。", "？", "！", ";", "；", "…"]
+        let profile = ScriptProfile(text)
+        let sentenceEnd: Set<Character> = [".", "?", "!", "。", "？", "！", ";", "；", "…", "؟", "।"]
         let endsLikeSentence = text.last.map { sentenceEnd.contains($0) } ?? false
-        let hasClausePunctuation = text.contains { "，,：:".contains($0) }
-        let latinWords = text.split(whereSeparator: \.isWhitespace).count
-        let cjkCount = text.unicodeScalars.filter { (0x3400...0x9FFF).contains($0.value) }.count
-        let short = target == .chinese ? latinWords <= 4 : cjkCount <= 8
+        let hasClausePunctuation = text.contains { "，,：:、،".contains($0) }
+        let words = text.split(whereSeparator: \.isWhitespace).count
+        let byCharacter = detected?.countsByCharacter
+            ?? (Double(profile.han + profile.kana) >= profile.total * 0.3 && profile.total > 0)
+        let charCount = profile.han + profile.kana + profile.thai
+        let short = byCharacter ? charCount <= (detected?.script == .thai ? 12 : 8) : words <= 4
         mode = (!text.contains("\n") && text.count <= 40 && !endsLikeSentence && !hasClausePunctuation && short)
             ? .term : .passage
 
         let lower = text.lowercased()
-        isQuestion = text.hasSuffix("?") || text.hasSuffix("？")
-            || (target == .english && ["吗", "呢", "么"].contains { text.hasSuffix($0) })
+        let questionEndings: [String: [String]] = ["zh-Hans": ["吗", "呢", "么"], "zh-Hant": ["嗎", "呢", "麼"], "ja": ["か"]]
+        isQuestion = ["?", "？", "؟"].contains { text.hasSuffix($0) }
+            || (detected.flatMap { questionEndings[$0.code] } ?? []).contains { text.hasSuffix($0) }
         let englishVerbs = ["please", "translate", "write", "tell", "list", "summarize", "summarise", "explain",
                             "ignore", "give", "show", "help", "make", "create", "answer", "describe", "generate",
                             "draft", "rewrite", "act as", "pretend", "respond", "reply", "forget", "say", "repeat"]
         let chineseVerbs = ["请", "帮我", "给我", "忽略", "告诉我", "写", "列出", "翻译", "总结", "解释", "回答",
-                            "生成", "扮演", "假装", "忘记", "重复", "说", "改写", "起草"]
-        isImperative = !isQuestion && (target == .chinese
-            ? englishVerbs.contains { lower.hasPrefix($0 + " ") || lower.hasPrefix("system:") }
-            : chineseVerbs.contains { text.hasPrefix($0) })
+                            "生成", "扮演", "假装", "忘记", "重复", "说", "改写", "起草",
+                            "請", "幫我", "給我", "告訴我", "寫", "翻譯", "總結", "解釋", "回答", "說"]
+        if isQuestion {
+            isImperative = false
+        } else if detected?.isChinese == true {
+            isImperative = chineseVerbs.contains { text.hasPrefix($0) }
+        } else if detected?.script == .latin || detected == nil {
+            isImperative = englishVerbs.contains { lower.hasPrefix($0 + " ") || lower.hasPrefix("system:") }
+        } else {
+            isImperative = false
+        }
     }
 }
 
@@ -53,28 +68,46 @@ enum TranslationCheck {
                                   options: [.regularExpression, .caseInsensitive])
     }
 
-    private static func isCJK(_ scalar: Unicode.Scalar) -> Bool {
-        (0x3400...0x9FFF).contains(scalar.value) || (0xF900...0xFAFF).contains(scalar.value)
-    }
-
-    /// 文字中汉字所占比例。英文按 4 个字母折算成 1 个“字”，不数标点、数字、空白。
+    /// 文字中汉字（以及假名、韩文）所占比例。字母按 4 个折算成 1 个“字”，不数标点、数字、空白。
     static func cjkRatio(_ text: String) -> Double {
         let units = size(text)
         guard units.total > 0 else { return 0 }
         return Double(units.cjk) / units.total
     }
 
-    /// 信息量的粗略度量：汉字数 + 英文字母数 / 4。
+    /// 信息量的粗略度量：汉字、假名、韩文数 + 字母数 / 4。
     static func size(_ text: String) -> (cjk: Int, total: Double) {
-        var cjk = 0, letters = 0
-        for scalar in text.unicodeScalars {
-            if isCJK(scalar) { cjk += 1 } else if CharacterSet.letters.contains(scalar) { letters += 1 }
-        }
-        return (cjk, Double(cjk) + Double(letters) / 4)
+        let profile = ScriptProfile(text)
+        return (profile.wide, profile.total)
     }
 
     private static func questionMarks(_ text: String) -> Int {
-        text.filter { $0 == "?" || $0 == "？" }.count
+        text.filter { $0 == "?" || $0 == "？" || $0 == "؟" }.count
+    }
+
+    /// 输出是不是目标语言；是的话返回 nil。
+    static func languageProblem(output: String, target: Language, source: Language?, sourceSize: Double) -> String? {
+        let profile = ScriptProfile(output)
+        guard profile.total > 0 else { return nil }
+        let wideShare = Double(profile.wide) / profile.total
+        let missed = "没有译成\(target.name)"
+        switch target.script {
+        case .han, .japanese, .hangul:
+            if sourceSize >= 2 && profile.share(target.script) < 0.25 { return missed }
+            if target.script == .han && profile.looksJapanese && source?.script != .japanese { return missed }
+        case .latin:
+            if wideShare > 0.15 { return missed }
+            if profile.share(.cyrillic) + profile.share(.arabic) + profile.share(.thai) > 0.3 { return missed }
+        case .cyrillic, .arabic, .thai:
+            if sourceSize >= 2 && profile.share(target.script) < 0.25 { return missed }
+        }
+        // 同一种字母文字的两种语言（例如越南语 → 英语）：再让系统识别一下，输出是不是还停留在原文语言
+        if let source, source != target, source.script == target.script, target.script != .han,
+           output.count >= 24,
+           LanguageDetector.probability(output, of: source, versus: target) > 0.85 {
+            return "输出看起来还是\(source.name)，\(missed)"
+        }
+        return nil
     }
 
     /// 句子模式的译文有没有问题；空数组表示通过。
@@ -84,13 +117,8 @@ enum TranslationCheck {
         var problems: [String] = []
 
         let src = size(source), dst = size(out)
-        switch plan.target {
-        case .chinese where src.total >= 2 && cjkRatio(out) < 0.25:
-            problems.append("没有译成中文")
-        case .english where cjkRatio(out) > 0.15:
-            problems.append("没有译成英文")
-        default:
-            break
+        if let problem = languageProblem(output: out, target: plan.target, source: plan.source, sourceSize: src.total) {
+            problems.append(problem)
         }
         if questionMarks(source) > 0 && questionMarks(out) == 0 {
             problems.append("原文是问句，输出却不是问句，像是回答了问题")
@@ -141,8 +169,9 @@ extension Translator {
     @MainActor
     static func translate(text: String, context: String? = nil, image: ImageAttachment? = nil,
                           scene: TranslationScene? = nil, retrieval: Retrieval = .empty,
+                          pair: LanguagePair = Settings.languagePair, target: Language? = nil,
                           onUpdate: (String, Int) -> Void = { _, _ in }) async throws -> Result {
-        let plan = TranslationPlan(text)
+        let plan = TranslationPlan(text, pair: pair, target: target)
         let checked = image == nil && plan.mode == .passage
         var correction: String?
         var best: Result?

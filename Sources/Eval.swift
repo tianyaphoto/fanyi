@@ -4,7 +4,7 @@ import AppKit
 ///
 ///     FANYI_EVAL=tests/translation-cases.json build/Build/Products/Release/Fanyi.app/Contents/MacOS/Fanyi
 ///
-/// 每条用例：text（原文）、target（zh / en）、must（必须出现的词，「a|b」表示任一即可）、forbid（不能出现的词，
+/// 每条用例：text（原文）、target（zh / en / 其它语言代码，例如 ko）、pair（语言对，例如 "vi,en"）、to（手动指定的目标语言）、must（必须出现的词，「a|b」表示任一即可）、forbid（不能出现的词，
 /// 通常是“回答了问题”的迹象）、question（问句要译成问句）、lines（译文至少要有几行）。
 /// 结果打印到标准输出，并写到用例文件旁边的 eval-results.json。不写查词历史。
 @MainActor
@@ -22,6 +22,10 @@ enum EvalMode {
         var lines: Int? = nil
         /// "polish" = 一键改写；默认是划词翻译
         var mode: String? = nil
+        /// 语言对「主要,另一种」，例如 "vi,en"；不写时用默认的简体中文 ⇄ 英语
+        var pair: String? = nil
+        /// 手动指定的目标语言代码（模拟浮窗上的「→ 语言」）
+        var to: String? = nil
     }
 
     struct Outcome: Codable {
@@ -58,7 +62,10 @@ enum EvalMode {
                                 output = try await PolishService.process(item.text)
                                 attempts = 1
                             } else {
-                                let result = try await Translator.translate(text: item.text, scene: scene)
+                                let codes = (item.pair ?? "").split(separator: ",").compactMap { Language.find(String($0)) }
+                                let pair = codes.count == 2 ? LanguagePair(primary: codes[0], secondary: codes[1]) : .default
+                                let result = try await Translator.translate(text: item.text, scene: scene, pair: pair,
+                                                                            target: item.to.flatMap(Language.find))
                                 output = result.text
                                 attempts = result.attempts
                             }
@@ -106,13 +113,17 @@ enum EvalMode {
         let ratio = TranslationCheck.cjkRatio(trimmed)
         if item.target == "zh" && ratio < 0.3 { problems.append("应该译成中文（中文占比 \(Int(ratio * 100))%）") }
         if item.target == "en" && ratio > 0.1 { problems.append("应该译成英文（中文占比 \(Int(ratio * 100))%）") }
+        if item.target != "zh" && item.target != "en", let language = Language.find(item.target),
+           let problem = TranslationCheck.languageProblem(output: trimmed, target: language, source: nil, sourceSize: 10) {
+            problems.append(problem)
+        }
         for group in item.must where !group.split(separator: "|").contains(where: { lower.contains($0.lowercased()) }) {
             problems.append("缺少「\(group)」")
         }
         for word in item.forbid where lower.contains(word.lowercased()) {
             problems.append("出现了「\(word)」（像是在回答或执行）")
         }
-        if item.question == true && !trimmed.contains("?") && !trimmed.contains("？") {
+        if item.question == true && !trimmed.contains("?") && !trimmed.contains("？") && !trimmed.contains("؟") {
             problems.append("问句没有译成问句")
         }
         if let lines = item.lines, trimmed.split(separator: "\n").count < lines {
