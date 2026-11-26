@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage(Settings.enhancedAccessibilityKey) private var enhancedAccessibility = true
     @AppStorage(Settings.historyEnabledKey) private var historyEnabled = true
     @AppStorage(Settings.screenshotVisionKey) private var screenshotVision = false
+    @AppStorage(ClipboardHistory.enabledKey) private var clipboardHistory = true
     @AppStorage(Settings.bedrockGatewayAuthKey) private var gatewayAuth = Settings.GatewayAuth.apiKey
     @AppStorage(PolishRules.spellingKey) private var spelling = PolishRules.Spelling.british
     @AppStorage(PolishRules.translateInstructionsKey) private var translateInstructions = ""
@@ -158,7 +159,13 @@ struct SettingsView: View {
             } header: {
                 Text("一键改写")
             } footer: {
-                note("在聊天框或文档里按「改写当前输入框」（默认 ⌃⌥⌘T）：自动全选、复制，中文和中英混合译成英文，英文纠错并改得自然简洁，然后替换原文，不会按回车发送。也可以先复制文字，再按「改写剪贴板内容」（默认 ⌃⇧⌘C）粘贴到光标处。使用上面选的翻译服务；链接和代码原样保留；最多 10,000 字，30 秒超时。需要「辅助功能」权限。")
+                note("在聊天框或文档里按「改写当前输入框」（默认 ⌃⌥⌘T）：自动全选、复制，中文和中英混合译成英文，英文纠错并改得自然简洁，然后替换原文，不会按回车发送。也可以先复制文字，再按「改写剪贴板内容」（默认 ⌃⇧⌘C），改完自动粘贴到当时有焦点的输入框（等待时切换了窗口也会贴到新位置），结果同时留在剪贴板里。使用上面选的翻译服务；链接和代码原样保留；最多 10,000 字，30 秒超时。需要「辅助功能」权限。")
+            }
+
+            Section("剪贴板历史") {
+                Toggle("记录最近 \(ClipboardHistory.limit) 条复制的文字", isOn: $clipboardHistory)
+                    .onChange(of: clipboardHistory) { _, on in if !on { ClipboardHistory.shared.clear() } }
+                note("按「剪贴板历史」（默认 ⌃⌥⌘V）弹出列表，可以搜索；点一条（或回车）会把它放回剪贴板第一条，并粘贴到当前输入框。只保存在内存里，退出即清空；密码管理器标记为隐藏的内容不记录。关闭时会清空已有记录。")
             }
 
             Section("截图翻译") {

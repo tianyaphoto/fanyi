@@ -18,6 +18,10 @@ final class Coordinator {
             AXProbe.run(target)
             return
         }
+        if let bundle = ClipboardSelfTest.bundle {
+            ClipboardSelfTest.run(bundle)
+            return
+        }
         if let mode = PolishSelfTest.mode {
             PolishSelfTest.run(mode)
             return
@@ -53,6 +57,7 @@ final class Coordinator {
             ClickSelfTest.run(button, popup: popup)
             return
         }
+        ClipboardHistory.shared.start()
         ShortcutCenter.shared.handler = { [weak self] action in self?.perform(action) }
         ShortcutCenter.shared.apply()
     }
@@ -64,6 +69,7 @@ final class Coordinator {
         case .input: showInput()
         case .polishField: PolishCoordinator.shared.polishField()
         case .polishClipboard: PolishCoordinator.shared.polishClipboard()
+        case .clipboardHistory: ClipboardPanelController.shared.toggle()
         }
     }
 

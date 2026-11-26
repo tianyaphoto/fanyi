@@ -398,7 +398,7 @@ final class PolishCoordinator {
         let pasteboard = NSPasteboard.general
 
         let original: String
-        var copyCount: Int
+        let copyCount: Int
         var fieldAtCopy: String?
         var selectionAtCopy: CFRange?
         switch mode {
@@ -432,6 +432,7 @@ final class PolishCoordinator {
             }
             original = text
             copyCount = pasteboard.changeCount
+            Toast.shared.show("正在改写剪贴板里的文字，完成后自动粘贴到当前输入框…", seconds: 8)
             fieldAtCopy = target.value()
             selectionAtCopy = target.selection()
             log.add("已读取剪贴板，\(original.count) 字")
@@ -465,6 +466,11 @@ final class PolishCoordinator {
         lastResult = result
         lastOriginal = original
 
+        if mode == .clipboard {
+            await pasteIntoCurrentField(result)
+            return
+        }
+
         // 粘贴前检查：剪贴板、输入目标、等待期间的操作
         if pasteboard.changeCount != copyCount {
             fail("等待期间剪贴板有了新内容，已保留新内容，没有自动粘贴。结果可以从菜单「复制上次改写结果」取回", level: .warning)
@@ -494,16 +500,52 @@ final class PolishCoordinator {
         case .field:
             expected = result
         case .clipboard:
-            let ns = before as NSString
-            let location = min(max(0, selection.location), ns.length)
-            let end = min(ns.length, location + max(0, selection.length))
-            expected = ns.substring(to: location) + result + ns.substring(from: end)
+            expected = Self.replacing(selection, in: before, with: result)
         }
         if await waitForValue(target, equals: expected, timeout: 2) {
             log.add("已验证粘贴")
         } else {
             fail("粘贴结果未确认：请先检查原输入框，避免重复粘贴", level: .warning)
         }
+    }
+
+    /// 改写剪贴板：结果写回剪贴板，再粘贴到「现在」有焦点的输入框。
+    /// 等待期间切换了窗口或输入框也照样粘贴（用户就是想贴到当前位置；原输入框里的文字不会被替换）。
+    private func pasteIntoCurrentField(_ result: String) async {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(result, forType: .string)
+        log.add("结果已写入剪贴板")
+        guard await KeySynth.waitForRelease(timeout: 3) else {
+            fail("一直有按键按着，没有自动粘贴。结果已在剪贴板里，可以手动粘贴", level: .warning)
+            return
+        }
+        guard let now = FocusTarget.current() else {
+            fail("当前在翻译神器自己的窗口里，没有自动粘贴。结果已在剪贴板里，可以手动粘贴", level: .warning)
+            return
+        }
+        let before = now.value()
+        let selection = now.selection()
+        KeySynth.press(kVK_ANSI_V)
+        log.add("已发送 ⌘V 到 \(now.name)")
+        guard let before, let selection else {
+            log.add("目标读不到文字，无法回读确认", .warning)
+            Toast.shared.show("已粘贴改写结果（这个应用读不到文字，请看一眼输入框）")
+            return
+        }
+        if await waitForValue(now, equals: Self.replacing(selection, in: before, with: result), timeout: 2) {
+            log.add("已验证粘贴")
+            Toast.shared.show("已粘贴改写结果", seconds: 2)
+        } else {
+            fail("粘贴结果未确认：请看一眼输入框；结果也在剪贴板里", level: .warning)
+        }
+    }
+
+    private static func replacing(_ selection: CFRange, in text: String, with insert: String) -> String {
+        let ns = text as NSString
+        let location = min(max(0, selection.location), ns.length)
+        let end = min(ns.length, location + max(0, selection.length))
+        return ns.substring(to: location) + insert + ns.substring(from: end)
     }
 
     /// ⌘A 之后等选区覆盖整个输入框（最多 0.6 秒）。

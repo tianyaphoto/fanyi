@@ -137,12 +137,26 @@ enum PolishSelfTest {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
                 polish.polishClipboard()
+                // FANYI_SELFTEST_SWITCH=<文件>：等待模型时打开另一个文档，模拟用户换了输入框
+                if let other = env["FANYI_SELFTEST_SWITCH"],
+                   let app = NSWorkspace.shared.frontmostApplication?.bundleURL {
+                    try? await Task.sleep(for: .milliseconds(150))
+                    let config = NSWorkspace.OpenConfiguration()
+                    config.activates = true
+                    _ = try? await NSWorkspace.shared.open([URL(fileURLWithPath: other)], withApplicationAt: app, configuration: config)
+                    print("已切换到 \(other)")
+                }
             } else {
                 polish.polishField()
             }
             try? await Task.sleep(for: .milliseconds(200))
             for _ in 0..<600 where polish.isRunning { try? await Task.sleep(for: .milliseconds(100)) }
             for entry in DiagnosticsLog.shared.entries { print("  \(entry.message)") }
+            if let now = FocusTarget.current() {
+                var title: CFTypeRef?
+                if let window = now.window { AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &title) }
+                print("当前窗口：\(title as? String ?? "?")；内容：\(now.value() ?? "（读不到）")")
+            }
             exit(0)
         }
     }
@@ -216,5 +230,57 @@ enum AXProbe {
         let (e5, _) = copy(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute)
         print("系统元素 → 焦点元素：err=\(e5.rawValue)")
         exit(0)
+    }
+}
+
+/// 开发用：剪贴板历史自测。先把测试窗口（例如 TextEdit 的空文档）放到最前面，再运行
+///     FANYI_CLIPHIST_SELFTEST=<测试窗口的 Bundle ID> [FANYI_DEMO_DIR=<截图目录>] /Applications/Fanyi.app/Contents/MacOS/Fanyi
+/// 依次复制三段文字 → 弹出列表（截图 cliphist.png）→ 搜索 beta → 回车，检查剪贴板第一条和输入框内容。
+@MainActor
+enum ClipboardSelfTest {
+    static var bundle: String? { ProcessInfo.processInfo.environment["FANYI_CLIPHIST_SELFTEST"] }
+
+    static func run(_ bundle: String) {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        print("辅助功能已授权：\(AXIsProcessTrusted())")
+        ClipboardHistory.shared.start()
+        Task {
+            for _ in 0..<100 where NSWorkspace.shared.frontmostApplication?.bundleIdentifier != bundle {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundle else { print("测试窗口没有到最前面"); exit(2) }
+            for text in ["alpha 第一条", "beta 第二条：Please review the PR before Friday.", "gamma 第三条"] {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+                try? await Task.sleep(for: .milliseconds(700))
+            }
+            print("历史：\(ClipboardHistory.shared.items.map(\.text))")
+            let controller = ClipboardPanelController.shared
+            controller.show()
+            try? await Task.sleep(for: .milliseconds(800))
+            if let dir = ProcessInfo.processInfo.environment["FANYI_DEMO_DIR"],
+               let panel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible && $0.frame.width > 400 }),
+               let view = panel.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: rep)
+                try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: dir).appendingPathComponent("cliphist.png"))
+            }
+            let before = FocusTarget.current()?.value()
+            // 真实按键：输入 beta，再回车
+            for code in [kVK_ANSI_B, kVK_ANSI_E, kVK_ANSI_T, kVK_ANSI_A, kVK_Return, kVK_Return] {
+                let source = CGEventSource(stateID: .privateState)
+                for down in [true, false] {
+                    CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(code), keyDown: down)?.post(tap: .cghidEventTap)
+                    try? await Task.sleep(for: .milliseconds(30))
+                }
+                try? await Task.sleep(for: .milliseconds(120))
+            }
+            try? await Task.sleep(for: .milliseconds(1200))
+            let after = FocusTarget.current()?.value()
+            print("剪贴板第一条：\(NSPasteboard.general.string(forType: .string) ?? "")")
+            print("历史顺序：\(ClipboardHistory.shared.items.map(\.text))")
+            print("输入框之前：\(before ?? "（读不到）")")
+            print("输入框之后：\(after ?? "（读不到）")")
+            exit(after?.contains("beta 第二条") == true ? 0 : 1)
+        }
     }
 }

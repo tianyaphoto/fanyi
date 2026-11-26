@@ -8,7 +8,7 @@ struct Shortcut: Codable, Equatable {
 }
 
 enum HotKeyAction: String, CaseIterable, Identifiable {
-    case selection, screenshot, input, polishField, polishClipboard
+    case selection, screenshot, input, polishField, polishClipboard, clipboardHistory
 
     var id: String { rawValue }
 
@@ -19,6 +19,7 @@ enum HotKeyAction: String, CaseIterable, Identifiable {
         case .input: return "输入翻译"
         case .polishField: return "改写当前输入框"
         case .polishClipboard: return "改写剪贴板内容"
+        case .clipboardHistory: return "剪贴板历史"
         }
     }
 
@@ -29,6 +30,7 @@ enum HotKeyAction: String, CaseIterable, Identifiable {
         case .input: return Shortcut(keyCode: kVK_ANSI_A, modifiers: optionKey, display: "⌥A")
         case .polishField: return Shortcut(keyCode: kVK_ANSI_T, modifiers: controlKey | optionKey | cmdKey, display: "⌃⌥⌘T")
         case .polishClipboard: return Shortcut(keyCode: kVK_ANSI_C, modifiers: controlKey | shiftKey | cmdKey, display: "⌃⇧⌘C")
+        case .clipboardHistory: return Shortcut(keyCode: kVK_ANSI_V, modifiers: controlKey | optionKey | cmdKey, display: "⌃⌥⌘V")
         }
     }
 

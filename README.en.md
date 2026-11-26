@@ -19,9 +19,10 @@ Homepage: <https://tianyaphoto.github.io/fanyi/en.html> · Download: [latest rel
 - **Words with context**: looking up a word shows the macOS dictionary instantly, then an AI explanation of what the word means *in the sentence you selected it from*.
 - **Translation scenes**: six built-in scenes — General, Document, Technical, Academic, Email & Chat, Contracts — each with its own rules (documents keep headings and lists; technical text keeps code, commands and identifiers; contracts translate *shall not* strictly). The scene is picked automatically from the current app, window title and URL (Google Docs → Document, GitHub → Technical, Slack → Chat …). Switch it in the popup, tell it to remember a site, edit the rules or add your own scenes.
 - **Knowledge base and glossary**: add your docs, product notes or past translations (text, Markdown, PDF, Word, RTF, HTML); relevant passages are retrieved locally (BM25) and sent as reference. Glossary terms (`underwriting = 核保`) are always translated your way. The popup shows what was referenced.
-- **One-key polish**: in any text field press `⌃⌥⌘T`. Fanyi selects all, copies, translates Chinese (or mixed text) into English or fixes English spelling and grammar, and pastes the result back — it never presses Return for you. `⌃⇧⌘C` polishes the clipboard and pastes at the cursor. British spelling by default (American optional), custom instructions, links and code kept verbatim.
+- **One-key polish**: in any text field press `⌃⌥⌘T`. Fanyi selects all, copies, translates Chinese (or mixed text) into English or fixes English spelling and grammar, and pastes the result back — it never presses Return for you. `⌃⇧⌘C` polishes the clipboard and pastes the result into whichever field is focused when it finishes. British spelling by default (American optional), custom instructions, links and code kept verbatim.
 - **Translates, never answers**: text to translate may be a question or an instruction ("What is the capital of China?"); it is translated, not answered. Fanyi decides word vs. sentence and target language locally, checks the output (language, questions kept as questions, length) and retries once if it doesn't look like a translation.
 - **Vocabulary book and history**: save words with the sentence and document they came from; repeated lookups are flagged so you notice words worth learning.
+- **Clipboard history**: press `⌃⌥⌘V` for the last 10 things you copied, with search; click one (or press Return) to put it back on top of the clipboard and paste it into the current field. Kept in memory only and cleared on quit; items marked concealed by password managers are skipped; can be turned off in settings.
 - **Google Docs** works too (its text is drawn on a canvas, so Fanyi copies the selection instead).
 - **Long text**: a larger popup, collapsible source, paragraph-by-paragraph bilingual view; the popup is placed so it doesn't cover your selection.
 - **Auto-update** via [Sparkle](https://sparkle-project.org/) (from 1.2).
@@ -65,6 +66,7 @@ API keys are stored per service in a plaintext file under `~/Library/Application
 | Input translation | `⌥A` |
 | Polish current field | `⌃⌥⌘T` |
 | Polish clipboard | `⌃⇧⌘C` |
+| Clipboard history | `⌃⌥⌘V` |
 
 All can be changed in Settings → Shortcuts.
 

@@ -6,6 +6,7 @@ struct FanyiApp: App {
     static let isDevRun = ProcessInfo.processInfo.environment["FANYI_EVAL"] != nil
         || ProcessInfo.processInfo.environment["FANYI_DEMO_DIR"] != nil
         || ProcessInfo.processInfo.environment["FANYI_POLISH_SELFTEST"] != nil
+        || ProcessInfo.processInfo.environment["FANYI_CLIPHIST_SELFTEST"] != nil
         || ProcessInfo.processInfo.environment["FANYI_CLICK_SELFTEST"] != nil
         || ProcessInfo.processInfo.environment["FANYI_AX_PROBE"] != nil
 
@@ -42,6 +43,7 @@ private struct MenuContent: View {
         Button("复制上次改写原文") { polish.copyLastOriginal() }
             .disabled(polish.lastOriginal == nil)
         Button("诊断日志…") { Windows.showDiagnostics() }
+        Button("剪贴板历史" + suffix(.clipboardHistory)) { ClipboardPanelController.shared.show() }
         Divider()
         Button("生词本") { Windows.showVocabulary() }
         Button("查词历史") { Windows.showHistory() }
