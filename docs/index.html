@@ -266,7 +266,7 @@ SLA = 服务等级协议</code></pre>
       <div class="steps">
         <div class="step"><div><h3>下载并解压</h3><p><a href="https://github.com/tianyaphoto/fanyi/releases/latest/download/Fanyi.zip">下载 Fanyi.zip</a>，双击解压，把 Fanyi.app 拖进「应用程序」文件夹。</p></div></div>
         <div class="step"><div><h3>打开</h3><p>App 已经过苹果公证，双击就能打开。它常驻在屏幕右上角的菜单栏，图标是一个对话气泡。</p></div></div>
-        <div class="step"><div><h3>选翻译服务</h3><p>第一次运行会打开设置。选一个翻译服务，填 API Key 和模型名（不预设模型，填服务商提供的模型名）；装了 Claude Code 的话可以直接用 <code>claude -p</code>，不用 Key。</p></div></div>
+        <div class="step"><div><h3>选翻译服务</h3><p>第一次运行会打开设置。选一个翻译服务，填 API Key 和模型名（DeepSeek 下拉选择，默认 deepseek-flash；其它服务填服务商提供的模型名）；装了 Claude Code 的话可以直接用 <code>claude -p</code>，不用 Key。</p></div></div>
         <div class="step"><div><h3>授予权限</h3><p>划词和一键改写需要「辅助功能」权限，截图翻译需要「屏幕录制」权限。设置窗口的「权限」一栏有跳转按钮。</p></div></div>
       </div>
       <div class="note">想自己编译：<code>brew install xcodegen</code>，克隆仓库后运行 <code>./build.sh install</code>。</div>
@@ -282,7 +282,7 @@ SLA = 服务等级协议</code></pre>
             <tr><td>AWS Bedrock</td><td>通过 Bedrock 使用 Claude</td></tr>
             <tr><td>Bedrock 网关</td><td>企业网关或代理，x-api-key 或 Bearer，可加请求头</td></tr>
             <tr><td>OpenAI API</td><td>Chat Completions，自己填模型名</td></tr>
-            <tr><td>DeepSeek</td><td>自己填模型名，不能看图</td></tr>
+            <tr><td>DeepSeek</td><td>下拉选择模型，默认 deepseek-flash；不能看图</td></tr>
             <tr><td>通义千问</td><td>阿里云百炼，自己填模型名</td></tr>
             <tr><td>自定义</td><td>任何 OpenAI 兼容服务：Kimi、智谱、OpenRouter、本机 Ollama……</td></tr>
             <tr><td>claude -p</td><td>调用本机 Claude Code，用你的 Claude 账号额度</td></tr>

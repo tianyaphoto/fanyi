@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage(Settings.historyEnabledKey) private var historyEnabled = true
     @AppStorage(Settings.screenshotVisionKey) private var screenshotVision = false
     @AppStorage(ClipboardHistory.enabledKey) private var clipboardHistory = true
+    @AppStorage(Settings.modelKey(for: .deepseek)) private var deepSeekModel = Settings.deepSeekModels[0]
     @AppStorage(Settings.bedrockGatewayAuthKey) private var gatewayAuth = Settings.GatewayAuth.apiKey
     @AppStorage(PolishRules.spellingKey) private var spelling = PolishRules.Spelling.british
     @AppStorage(PolishRules.translateInstructionsKey) private var translateInstructions = ""
@@ -62,7 +63,10 @@ struct SettingsView: View {
                     case .deepseek:
                         keyField(prompt: "sk-…")
                         urlField()
-                        modelField()
+                        Picker("模型", selection: $deepSeekModel) {
+                            Text("deepseek-flash（快，默认）").tag("deepseek-flash")
+                            Text("deepseek-v4-pro（更强，较慢）").tag("deepseek-v4-pro")
+                        }
                         note("在 platform.deepseek.com 获取 API Key。DeepSeek 不能看图，截图翻译会先在本机识别文字。")
                     case .qwen:
                         keyField(prompt: "sk-…")
@@ -207,9 +211,13 @@ struct SettingsView: View {
                     Toggle("自动检查更新（每天一次）", isOn: Binding(
                         get: { Updater.shared.automaticallyChecksForUpdates },
                         set: { Updater.shared.automaticallyChecksForUpdates = $0 }))
+                    Toggle("自动下载并安装", isOn: Binding(
+                        get: { Updater.shared.automaticallyDownloadsUpdates },
+                        set: { Updater.shared.automaticallyDownloadsUpdates = $0 }))
+                        .disabled(!Updater.shared.automaticallyChecksForUpdates)
                     Button("立即检查更新") { Updater.shared.checkForUpdates() }
                         .disabled(!Updater.shared.canCheckForUpdates)
-                    note("有新版本时会弹窗显示更新说明，点「安装」后自动下载、校验签名、替换并重启。设置、生词本、历史、资料库和 API Key 都会保留。")
+                    note("打开「自动下载并安装」时，新版本在后台下载、校验签名，等你 2 分钟没操作时自动替换并重启（不弹窗），退出时也会装好。关掉则改为弹窗显示更新说明，由你点「安装」。设置、生词本、历史、资料库和 API Key 都会保留。")
                 } else {
                     note("这是本机编译的开发版，不检查更新。")
                 }

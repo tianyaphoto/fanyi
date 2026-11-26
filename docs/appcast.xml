@@ -3,6 +3,21 @@
     <channel>
         <title>Fanyi</title>
         <item>
+            <title>1.6</title>
+            <pubDate>Thu, 26 Nov 2026 12:22:03 +0800</pubDate>
+            <link>https://tianyaphoto.github.io/fanyi/</link>
+            <sparkle:version>7</sparkle:version>
+            <sparkle:shortVersionString>1.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h3>翻译神器 1.6</h3>
+<ul>
+  <li><b>静默自动更新</b>：以后有新版本会在后台下载、校验签名，等你 2 分钟没操作（且没开着浮窗、没在改写）时自动替换并重启，不再弹窗；退出时也会装好。设置 →「更新」关掉「自动下载并安装」可改回弹窗确认。这次升级还需要你点一次「安装」，之后就全自动了。</li>
+  <li><b>DeepSeek 模型改为下拉选择</b>：deepseek-flash（默认，快）或 deepseek-v4-pro（更强，较慢）。以前手填的旧模型名（如 deepseek-chat）会自动换成 deepseek-flash。</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.6/Fanyi.zip" length="2852028" type="application/octet-stream" sparkle:edSignature="QuEyj8V/bdrRbitxxoLrp+7QH1drGXzLPOTMfvr82oHPH2y+SNY0ka6dmgN32P8U4C4l8qoD8XXax03mwhnKAA=="/>
+        </item>
+        <item>
             <title>1.5</title>
             <pubDate>Thu, 26 Nov 2026 11:15:37 +0800</pubDate>
             <link>https://tianyaphoto.github.io/fanyi/</link>
@@ -31,23 +46,6 @@
 </ul>
 ]]></description>
             <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.4/Fanyi.zip" length="2763205" type="application/octet-stream" sparkle:edSignature="qMwvbsvPUjyl7qHxpXknPc6bLnJy3bZ/Jh5Eqrfw3SrAbmq1St7bA23TvNahF2i7wJdLSbTBYsKdiDoJ0uZrBA=="/>
-        </item>
-        <item>
-            <title>1.3</title>
-            <pubDate>Wed, 25 Nov 2026 17:58:30 +0800</pubDate>
-            <link>https://tianyaphoto.github.io/fanyi/</link>
-            <sparkle:version>4</sparkle:version>
-            <sparkle:shortVersionString>1.3</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h3>翻译神器 1.3</h3>
-<ul>
-  <li><b>多种语言</b>：默认还是中英互译；在设置里可以任选两种语言（共 16 种），比如越南语 ⇄ 英语、英语 ⇄ 韩语、日语 ⇄ 中文。两种语言互相翻译，其他语言都译成主要语言。</li>
-  <li><b>临时换目标语言</b>：浮窗里的「→ 语言」按钮可以只为这一次翻译换成别的语言。</li>
-  <li><b>截图识别更准</b>：自动判断文字语言，中英混排、中文界面的截图不再乱码；也能识别设置里选的语言（如韩文、越南文）。</li>
-  <li>可以用 Homebrew 安装：brew install --cask tianyaphoto/tap/fanyi</li>
-</ul>
-]]></description>
-            <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.3/Fanyi.zip" length="2766654" type="application/octet-stream" sparkle:edSignature="auq0OYburMzha20/GeJjaBl7VTGDdIsdBGiXxv5sd5gvH4sqPzDCYB10DD6V5wqMSt0MwINo61hnQIYAaWtmAw=="/>
         </item>
     </channel>
 </rss>

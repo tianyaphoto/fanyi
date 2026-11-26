@@ -266,7 +266,7 @@ SLA = 服务等级协议</code></pre>
       <div class="steps">
         <div class="step"><div><h3>Download and unzip</h3><p><a href="https://github.com/tianyaphoto/fanyi/releases/latest/download/Fanyi.zip">Download Fanyi.zip</a>, unzip it and drag Fanyi.app into Applications.</p></div></div>
         <div class="step"><div><h3>Open</h3><p>It is notarised by Apple, so it opens with a double-click. Look for the speech-bubble icon in the menu bar.</p></div></div>
-        <div class="step"><div><h3>Pick a service</h3><p>Settings open on first launch. Choose a translation service and paste its API key and a model name (none is preset) — or use <code>claude -p</code> with Claude Code, no key needed.</p></div></div>
+        <div class="step"><div><h3>Pick a service</h3><p>Settings open on first launch. Choose a translation service and paste its API key and a model name (DeepSeek defaults to deepseek-flash) — or use <code>claude -p</code> with Claude Code, no key needed.</p></div></div>
         <div class="step"><div><h3>Grant permissions</h3><p>Accessibility for select-to-translate and one-key polish; Screen Recording for screenshot translation. The settings window links to both.</p></div></div>
       </div>
       <div class="note">Build it yourself: <code>brew install xcodegen</code>, clone the repo, run <code>./build.sh install</code>.</div>
@@ -282,7 +282,7 @@ SLA = 服务等级协议</code></pre>
             <tr><td>AWS Bedrock</td><td>Claude via Bedrock</td></tr>
             <tr><td>Bedrock gateway</td><td>Corporate gateway or proxy, x-api-key or Bearer, extra headers</td></tr>
             <tr><td>OpenAI API</td><td>Chat Completions; enter a model name</td></tr>
-            <tr><td>DeepSeek</td><td>Enter a model name; no vision</td></tr>
+            <tr><td>DeepSeek</td><td>Pick a model from the list, deepseek-flash by default; no vision</td></tr>
             <tr><td>Qwen</td><td>Alibaba Cloud Model Studio; enter a model name</td></tr>
             <tr><td>Custom</td><td>Any OpenAI-compatible service: Kimi, Zhipu, OpenRouter, local Ollama…</td></tr>
             <tr><td>claude -p</td><td>Claude Code on your Mac, uses your Claude plan</td></tr>

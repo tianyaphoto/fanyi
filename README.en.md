@@ -25,7 +25,7 @@ Homepage: <https://tianyaphoto.github.io/fanyi/en.html> · Download: [latest rel
 - **Clipboard history**: press `⌃⌥⌘V` for the last 10 things you copied, with search; click one (or press Return) to put it back on top of the clipboard and paste it into the current field. Kept in memory only and cleared on quit; items marked concealed by password managers are skipped; can be turned off in settings.
 - **Google Docs** works too (its text is drawn on a canvas, so Fanyi copies the selection instead).
 - **Long text**: a larger popup, collapsible source, paragraph-by-paragraph bilingual view; the popup is placed so it doesn't cover your selection.
-- **Auto-update** via [Sparkle](https://sparkle-project.org/) (from 1.2).
+- **Auto-update** via [Sparkle](https://sparkle-project.org/) (from 1.2). From 1.6 updates download in the background and install silently once you've been idle for 2 minutes (or on quit); turn off "auto download and install" in Settings to get a prompt instead.
 
 ## One-key polish in detail
 
@@ -43,7 +43,7 @@ Homepage: <https://tianyaphoto.github.io/fanyi/en.html> · Download: [latest rel
 | AWS Bedrock (Claude) | Amazon Bedrock API key, model ID | Region + model ID with the `anthropic.` prefix. |
 | Bedrock gateway (Claude) | Gateway URL, model ID, API key | Corporate gateway or proxy: `URL/model/{modelId}/invoke`, `x-api-key` or Bearer, extra headers. No SigV4 signing, no local AWS credentials. |
 | OpenAI API | OpenAI API key, model name | Chat Completions. |
-| DeepSeek | DeepSeek API key, model name | No vision. |
+| DeepSeek | DeepSeek API key | Pick the model from a menu: `deepseek-flash` (default, fast) or `deepseek-v4-pro` (stronger). No vision. |
 | Qwen (通义千问) | Alibaba Cloud Model Studio key, model name | OpenAI-compatible. |
 | Custom (OpenAI-compatible) | URL and model | Kimi, Zhipu, OpenRouter, local Ollama (`http://localhost:11434/v1`, no key) … |
 | claude -p | [Claude Code](https://claude.com/claude-code) installed and logged in, model name (e.g. `sonnet`) | No API key; uses your Claude plan. Runs with `--safe-mode` so your own CLAUDE.md and hooks don't leak into translations. |
@@ -54,7 +54,7 @@ API keys are stored per service in a plaintext file under `~/Library/Application
 
 1. With Homebrew: `brew install --cask tianyaphoto/tap/fanyi`. Or download `Fanyi.zip` from the [latest release](https://github.com/tianyaphoto/fanyi/releases/latest), unzip, and drag `Fanyi.app` into Applications. Apple silicon and Intel; macOS 14 Sonoma or later.
 2. It is signed with a Developer ID and notarised by Apple — just double-click to open. A speech-bubble icon with 「译」 appears in the menu bar and settings open on first launch.
-3. Pick a translation service in settings and enter its key and a model name (no key needed for `claude -p`). No model is preset; use the model name from your provider.
+3. Pick a translation service in settings and enter its key and a model name (no key needed for `claude -p`). DeepSeek has a model menu (deepseek-flash by default); for other services, use the model name from your provider.
 4. Grant **Accessibility** (select-to-translate, one-key polish) and **Screen Recording** (screenshot translation) in System Settings → Privacy & Security; the settings window has shortcuts to both. Relaunch after granting Screen Recording.
 
 ## Default shortcuts

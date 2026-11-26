@@ -132,6 +132,12 @@ enum Settings {
         for provider in Provider.allCases {
             defaults[baseURLKey(for: provider)] = defaultBaseURL(for: provider)
         }
+        defaults[modelKey(for: .deepseek)] = deepSeekModels[0]
+        // 旧版本手填的 DeepSeek 模型名（如已下线的 deepseek-chat）不在下拉列表里：清掉，回到默认
+        let deepSeekKey = modelKey(for: .deepseek)
+        if let stored = UserDefaults.standard.string(forKey: deepSeekKey), !deepSeekModels.contains(stored) {
+            UserDefaults.standard.removeObject(forKey: deepSeekKey)
+        }
         UserDefaults.standard.register(defaults: defaults)
     }
 
@@ -152,9 +158,17 @@ enum Settings {
         return string(baseURLKey(for: provider), default: defaultBaseURL(for: provider))
     }
 
+    /// DeepSeek 用下拉菜单选模型（官方只有这两个），默认 deepseek-flash。
+    static let deepSeekModels = ["deepseek-flash", "deepseek-v4-pro"]
+
     static func model(for provider: Provider) -> String {
-        // 不内置默认模型：模型名都由用户自己填写。
-        string(modelKey(for: provider), default: "")
+        if provider == .deepseek {
+            // 旧版本手填的名字（如已下线的 deepseek-chat）不在列表里时，按默认的 deepseek-flash
+            let stored = string(modelKey(for: provider), default: "")
+            return deepSeekModels.contains(stored) ? stored : deepSeekModels[0]
+        }
+        // 其它服务不内置默认模型：模型名由用户自己填写。
+        return string(modelKey(for: provider), default: "")
     }
 
     static var cliPath: String { string(cliPathKey, default: "") }

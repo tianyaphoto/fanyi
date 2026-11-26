@@ -46,7 +46,7 @@
 | AWS Bedrock（Claude） | Amazon Bedrock API Key、模型名 | 通过 Bedrock 使用 Claude，填区域和带 `anthropic.` 前缀的模型名。短期 Key 最长 12 小时有效。 |
 | Bedrock 网关（Claude） | 网关地址、模型 ID、API Key | 企业网关或代理：请求 `地址/model/{模型ID}/invoke`，认证用 `x-api-key` 或 Bearer，可加额外请求头（如 `Send-Raw-Response-Header: true`）。不做 AWS SigV4 签名，不读取本机 AWS 凭据。 |
 | OpenAI API | OpenAI API Key、模型名 | 使用 Chat Completions 接口。 |
-| DeepSeek | DeepSeek API Key、模型名 | 不能看图。 |
+| DeepSeek | DeepSeek API Key | 模型从下拉菜单选：`deepseek-flash`（默认，快）或 `deepseek-v4-pro`（更强）。不能看图。 |
 | 通义千问 | 阿里云百炼 API Key、模型名 | OpenAI 兼容接口。 |
 | 自定义（OpenAI 兼容） | API 地址和模型名 | Kimi、智谱、硅基流动、OpenRouter 等同格式的服务；本机的 Ollama 填 `http://localhost:11434/v1`，API Key 留空。 |
 | claude -p | 已安装并登录的 [Claude Code](https://claude.com/claude-code)、模型名（如 `sonnet`） | 不需要 API Key，使用你的 Claude 账号额度。每次翻译要启动一次命令，比直接调 API 慢 1–2 秒。 |
@@ -74,7 +74,7 @@ App 使用 Developer ID 签名并通过了苹果公证，双击即可打开。
 
 ## 自动更新
 
-从 1.2 开始内置自动更新（[Sparkle](https://sparkle-project.org/)）：每天检查一次，有新版本时弹窗显示更新说明，点「安装」后自动下载、校验签名、替换并重启。菜单「检查更新…」可以手动检查，设置 →「更新」可以关闭自动检查。设置、生词本、历史、资料库和 API Key 都会保留。1.1 及更早的版本需要手动下载一次 1.2。
+从 1.2 开始内置自动更新（[Sparkle](https://sparkle-project.org/)）：每天检查一次。从 1.6 开始，发现新版本会在后台下载、校验签名，等你 2 分钟没操作（且没开着浮窗、没在改写）时静默替换并重启，退出时也会装好；设置 →「更新」关掉「自动下载并安装」则改回弹窗、由你点「安装」。菜单「检查更新…」可以手动检查，设置里也可以关闭自动检查。设置、生词本、历史、资料库和 API Key 都会保留。1.1 及更早的版本需要手动下载一次 1.2。
 
 ## 从源码编译
 
@@ -93,7 +93,7 @@ cd fanyi
 
 ## 首次使用
 
-1. **配置翻译服务**：在设置中选择服务，填入模型名（不预设模型，填服务商提供的模型名）；使用 API 的话，再填对应的 API Key。
+1. **配置翻译服务**：在设置中选择服务，填入模型名（DeepSeek 从下拉菜单选，默认 deepseek-flash；其它服务填服务商提供的模型名）；使用 API 的话，再填对应的 API Key。
 2. **授予「辅助功能」权限**（划词翻译需要）：系统设置 → 隐私与安全性 → 辅助功能 → 允许「Fanyi」。
 3. **授予「屏幕录制」权限**（截图翻译需要）：系统设置 → 隐私与安全性 → 录屏与系统录音 → 允许「Fanyi」，然后重新打开 App。
 

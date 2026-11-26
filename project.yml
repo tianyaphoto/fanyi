@@ -27,12 +27,14 @@ targets:
         SUPublicEDKey: xAKDG7ymGAvqy8jrceLh/Z9KuLf5VT3L7SnPKwoJOm0=
         SUEnableAutomaticChecks: true
         SUScheduledCheckInterval: 86400
+        # 发现新版后台自动下载；空闲时静默安装并重启（见 Sources/Updater.swift），退出时也会装
+        SUAutomaticallyUpdate: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.local.fanyi
         PRODUCT_NAME: Fanyi
-        MARKETING_VERSION: "1.5"
-        CURRENT_PROJECT_VERSION: "6"
+        MARKETING_VERSION: "1.6"
+        CURRENT_PROJECT_VERSION: "7"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Manual

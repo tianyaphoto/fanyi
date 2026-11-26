@@ -67,6 +67,14 @@ enum DemoMode {
                 if let window = NSApp.windows.first(where: { $0.title == "翻译神器设置" }), let view = window.contentView {
                     window.setContentSize(NSSize(width: 520, height: 1900))
                     try? await Task.sleep(for: .milliseconds(600))
+                    // 从顶部截（窗口会记住上次的滚动位置）
+                    func scrollViews(_ v: NSView) -> [NSScrollView] { (v as? NSScrollView).map { [$0] } ?? v.subviews.flatMap(scrollViews) }
+                    for scroll in scrollViews(view) {
+                        let flipped = scroll.documentView?.isFlipped ?? true
+                        let top = flipped ? NSPoint.zero : NSPoint(x: 0, y: max(0, (scroll.documentView?.bounds.height ?? 0) - scroll.contentView.bounds.height))
+                        scroll.contentView.scroll(to: top); scroll.reflectScrolledClipView(scroll.contentView)
+                    }
+                    try? await Task.sleep(for: .milliseconds(300))
                     if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
                         view.cacheDisplay(in: view.bounds, to: rep)
                         try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent("settings.png"))
