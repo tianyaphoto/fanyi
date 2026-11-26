@@ -243,6 +243,13 @@ final class TranslationModel {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(result.isEmpty ? (localDefinition ?? "") : result, forType: .string)
     }
+
+    /// 复制原文。截图翻译时是本地 OCR 识别出的文字。
+    func copySource() {
+        guard !source.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(source, forType: .string)
+    }
 }
 
 /// 朗读结束或被打断时通知模型。
@@ -285,6 +292,7 @@ struct TranslationView: View {
     @State private var showReferences = false
     @State private var bilingual = false
     @State private var copied = false
+    @State private var copiedSource = false
     @State private var copyTick = 0
     @State private var favoriteBounce = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -331,12 +339,16 @@ struct TranslationView: View {
             showFullSource = false
             showReferences = false
             copied = false
+            copiedSource = false
         }
         .task(id: copyTick) {
             // 复制成功的对勾停留一会儿再换回
             guard copyTick > 0 else { return }
             try? await Task.sleep(for: .milliseconds(1200))
-            if !Task.isCancelled { copied = false }
+            if !Task.isCancelled {
+                copied = false
+                copiedSource = false
+            }
         }
         .task(id: model.focusRequest) {
             guard model.inputMode else { return }
@@ -406,12 +418,21 @@ struct TranslationView: View {
                     IconButton(symbol: "speaker.wave.2", help: model.isSpeaking ? "停止朗读" : "朗读原文",
                                tint: model.isSpeaking ? Theme.accent : nil,
                                isActive: model.isSpeaking) { model.speak() }
+                    IconButton(symbol: copiedSource ? "checkmark" : "doc.plaintext",
+                               help: copiedSource ? "已复制" : (model.fromImage ? "复制原文（截图里识别出的文字）" : "复制原文"),
+                               tint: copiedSource ? Theme.success : nil) {
+                        model.copySource()
+                        copiedSource = true
+                        copied = false
+                        copyTick += 1
+                    }
                 }
                 if !model.source.isEmpty || model.fromImage {
                     IconButton(symbol: copied ? "checkmark" : "doc.on.doc", help: copied ? "已复制" : "复制译文",
                                tint: copied ? Theme.success : nil) {
                         model.copyResult()
                         copied = true
+                        copiedSource = false
                         copyTick += 1
                     }
                         .disabled(model.result.isEmpty && model.localDefinition == nil)

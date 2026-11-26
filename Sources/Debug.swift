@@ -105,6 +105,11 @@ enum DemoMode {
                 try? await Task.sleep(for: .milliseconds(300))
                 print("pin: \(before) -> \(popup.model.pinned)")
             }
+            // FANYI_DEMO_CLICK=copysource：调一次「复制原文」，打印剪贴板是否等于原文（会改剪贴板）
+            if ProcessInfo.processInfo.environment["FANYI_DEMO_CLICK"] == "copysource" {
+                popup.model.copySource()
+                print("copysource: \(NSPasteboard.general.string(forType: .string) == popup.model.source)")
+            }
             popup.snapshot(to: dir.appendingPathComponent("snapshot.png"))
             NSApp.terminate(nil)
         }

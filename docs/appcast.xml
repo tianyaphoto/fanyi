@@ -3,6 +3,20 @@
     <channel>
         <title>Fanyi</title>
         <item>
+            <title>1.8</title>
+            <pubDate>Thu, 26 Nov 2026 21:55:46 +0800</pubDate>
+            <link>https://tianyaphoto.github.io/fanyi/</link>
+            <sparkle:version>9</sparkle:version>
+            <sparkle:shortVersionString>1.8</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h3>翻译神器 1.8</h3>
+<ul>
+  <li><b>复制原文</b>：浮窗顶部「朗读原文」旁边多了一个「复制原文」按钮。截图翻译时，复制的是从截图里识别出的文字，不用再手动照着打一遍。原来的「复制译文」不变。</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.8/Fanyi.zip" length="2884941" type="application/octet-stream" sparkle:edSignature="g1ZWTKTJQdGEIQxvK8R1DMxCpg3PZY7Y0XUYbqoK6HUFaUZBHMPJcDAUgegjlA71Q0hrXJrS1738TWvgPtopBA=="/>
+        </item>
+        <item>
             <title>1.7</title>
             <pubDate>Thu, 26 Nov 2026 19:43:33 +0800</pubDate>
             <link>https://tianyaphoto.github.io/fanyi/</link>
@@ -31,21 +45,6 @@
 </ul>
 ]]></description>
             <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.6/Fanyi.zip" length="2852028" type="application/octet-stream" sparkle:edSignature="QuEyj8V/bdrRbitxxoLrp+7QH1drGXzLPOTMfvr82oHPH2y+SNY0ka6dmgN32P8U4C4l8qoD8XXax03mwhnKAA=="/>
-        </item>
-        <item>
-            <title>1.5</title>
-            <pubDate>Thu, 26 Nov 2026 11:15:37 +0800</pubDate>
-            <link>https://tianyaphoto.github.io/fanyi/</link>
-            <sparkle:version>6</sparkle:version>
-            <sparkle:shortVersionString>1.5</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h3>翻译神器 1.5</h3>
-<ul>
-  <li><b>剪贴板历史</b>：按 ⌃⌥⌘V 弹出最近 10 条复制过的文字，可以搜索；点一条（或回车）就把它放回剪贴板第一条，并自动粘贴到当前输入框。只保存在内存里，退出即清空；密码管理器标记为隐藏的内容不记录；设置里可以关闭。</li>
-  <li><b>改写剪贴板自动粘贴</b>：按 ⌃⇧⌘C 改写剪贴板后，结果会自动粘贴到当前有焦点的输入框；等待时换了窗口或输入框，也会贴到新的位置。</li>
-</ul>
-]]></description>
-            <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.5/Fanyi.zip" length="2839398" type="application/octet-stream" sparkle:edSignature="pTMt7pO9Z6pPLRCJVyOdVg5x/l+XFPcwwNacfa9Dq9gUbkhVp6j0Q+phVZwKzAbVFHDoNsseARMQbUWYCmbQCA=="/>
         </item>
     </channel>
 </rss>
