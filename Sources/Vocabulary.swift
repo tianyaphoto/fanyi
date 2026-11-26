@@ -218,7 +218,7 @@ struct VocabularyView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 } else {
-                    Text(entry.translation.replacingOccurrences(of: "\n", with: " "))
+                    Text(Translator.splitMemory(entry.translation).definition.replacingOccurrences(of: "\n", with: " "))
                         .font(Theme.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -304,11 +304,22 @@ struct VocabularyView: View {
                             .font(Theme.title)
                             .textSelection(.enabled)
                         contextSection(entry)
-                        Text(entry.translation.isEmpty ? "没有保存译文。" : entry.translation)
+                        let parts = Translator.splitMemory(entry.translation)
+                        Text(parts.definition.isEmpty ? "没有保存译文。" : parts.definition)
                             .font(Theme.body)
                             .lineSpacing(4)
-                            .foregroundStyle(entry.translation.isEmpty ? .secondary : .primary)
+                            .foregroundStyle(parts.definition.isEmpty ? .secondary : .primary)
                             .textSelection(.enabled)
+                        if let memory = parts.memory, !memory.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                SectionLabel("帮你记住")
+                                Text(memory)
+                                    .font(Theme.body)
+                                    .lineSpacing(4)
+                                    .textSelection(.enabled)
+                            }
+                            .surface()
+                        }
                         meta(entry)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

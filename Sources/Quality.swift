@@ -170,15 +170,18 @@ extension Translator {
     static func translate(text: String, context: String? = nil, image: ImageAttachment? = nil,
                           scene: TranslationScene? = nil, retrieval: Retrieval = .empty,
                           pair: LanguagePair = Settings.languagePair, target: Language? = nil,
+                          memory: Bool = false,
                           onUpdate: (String, Int) -> Void = { _, _ in }) async throws -> Result {
         let plan = TranslationPlan(text, pair: pair, target: target)
         let checked = image == nil && plan.mode == .passage
+        // 「帮你记住」只给要学的外语单词：查自己母语（语言对的第一种）的词不需要
+        let memory = memory && image == nil && plan.mode == .term && plan.source != plan.pair.primary
         var correction: String?
         var best: Result?
         for attempt in 1...2 {
             var raw = ""
             for try await chunk in stream(text: text, context: context, image: image, scene: scene,
-                                          retrieval: retrieval, plan: plan, correction: correction) {
+                                          retrieval: retrieval, plan: plan, correction: correction, memory: memory) {
                 raw += chunk
                 onUpdate(TranslationCheck.clean(raw, source: text), attempt)
             }

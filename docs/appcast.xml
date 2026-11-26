@@ -3,6 +3,21 @@
     <channel>
         <title>Fanyi</title>
         <item>
+            <title>1.7</title>
+            <pubDate>Thu, 26 Nov 2026 19:43:33 +0800</pubDate>
+            <link>https://tianyaphoto.github.io/fanyi/</link>
+            <sparkle:version>8</sparkle:version>
+            <sparkle:shortVersionString>1.7</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h3>翻译神器 1.7</h3>
+<ul>
+  <li><b>帮你记住单词</b>（设置 →「帮你记住单词」，默认关闭）：查外语单词时，在释义下面附上词根拆解、近义词和区别、反义词、常用搭配、易混词，再用你当时读的那句话做个记忆钩子，并提示第一次在哪遇到它。可以选「每次查单词」，或「同一个词查到第 3 次时」才给。收藏进生词本时一起保存。</li>
+  <li><b>鼠标划词更可靠</b>：在 Chrome 网页、Electron 应用里划词，即使系统没报告选中的文字，也会试着用「拷贝」读取，不再出现「⌥D 能翻、鼠标划词没反应」。</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.7/Fanyi.zip" length="2879630" type="application/octet-stream" sparkle:edSignature="AHTJHOVf0V1X7cEAUtOKSiDjSKl7bRd50z0x15T1IYvRVKF77o1XG8rLzAN6hm/3HRyOrVrzX+M0W2IKfZniAg=="/>
+        </item>
+        <item>
             <title>1.6</title>
             <pubDate>Thu, 26 Nov 2026 12:22:03 +0800</pubDate>
             <link>https://tianyaphoto.github.io/fanyi/</link>
@@ -31,21 +46,6 @@
 </ul>
 ]]></description>
             <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.5/Fanyi.zip" length="2839398" type="application/octet-stream" sparkle:edSignature="pTMt7pO9Z6pPLRCJVyOdVg5x/l+XFPcwwNacfa9Dq9gUbkhVp6j0Q+phVZwKzAbVFHDoNsseARMQbUWYCmbQCA=="/>
-        </item>
-        <item>
-            <title>1.4</title>
-            <pubDate>Wed, 25 Nov 2026 18:52:48 +0800</pubDate>
-            <link>https://tianyaphoto.github.io/fanyi/</link>
-            <sparkle:version>5</sparkle:version>
-            <sparkle:shortVersionString>1.4</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h3>翻译神器 1.4</h3>
-<ul>
-  <li><b>不再预设模型</b>：所有翻译服务（包括 claude -p）都需要在设置里自己填写模型名，填服务商提供的模型名即可。</li>
-  <li><b>升级后请检查设置</b>：以前没改过模型、一直用默认模型的，升级后翻译会提示「还没有填写模型」，点「打开设置」填上就行。</li>
-</ul>
-]]></description>
-            <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.4/Fanyi.zip" length="2763205" type="application/octet-stream" sparkle:edSignature="qMwvbsvPUjyl7qHxpXknPc6bLnJy3bZ/Jh5Eqrfw3SrAbmq1St7bA23TvNahF2i7wJdLSbTBYsKdiDoJ0uZrBA=="/>
         </item>
     </channel>
 </rss>

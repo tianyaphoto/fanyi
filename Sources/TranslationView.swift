@@ -17,6 +17,14 @@ final class TranslationModel {
     var isFavorited = false
     /// 这是第几次查这个词（0 表示未记录历史）。
     var lookupCount = 0
+    /// 这次查词附带了「帮你记住」
+    var wantsMemory = false
+    /// 第一次查这个词的时间和来源（第 2 次起才有）
+    var firstSeen: (date: Date, origin: String?)?
+
+    /// 释义和「帮你记住」分开显示
+    var definitionText: String { Translator.splitMemory(result).definition }
+    var memoryText: String? { Translator.splitMemory(result).memory }
     /// 看图翻译：截图本身发给了模型，source 是本地 OCR 的文字（可能为空）。
     var fromImage = false
     /// 来源信息（App、窗口标题、网址），用于选场景和「以后这里都用这个场景」
@@ -114,6 +122,8 @@ final class TranslationModel {
         // 重试不算一次新的查询
         if !isRetry {
             lookupCount = text.isEmpty ? 0 : HistoryStore.shared.record(text, context: context, origin: origin)
+            firstSeen = lookupCount >= 2 ? HistoryStore.shared.firstSeen(text) : nil
+            wantsMemory = !text.isEmpty && Settings.wantsMemoryAid(lookupCount: lookupCount)
         }
 
         isLoading = true
@@ -121,7 +131,7 @@ final class TranslationModel {
             do {
                 let outcome = try await Translator.translate(
                     text: text, context: context, image: capture.image, scene: scene, retrieval: retrieval,
-                    target: targetOverride
+                    target: targetOverride, memory: wantsMemory
                 ) { [weak self] partial, attempt in
                     guard let self, !Task.isCancelled else { return }
                     // 第二次开始时清空第一次的输出，并说明为什么重翻
@@ -181,6 +191,8 @@ final class TranslationModel {
         needsAPIKey = false
         isFavorited = false
         lookupCount = 0
+        wantsMemory = false
+        firstSeen = nil
     }
 
     func cancel() {
@@ -296,6 +308,9 @@ struct TranslationView: View {
                         localSection(local)
                     }
                     aiSection
+                    if let memory = model.memoryText, !memory.isEmpty {
+                        memorySection(memory)
+                    }
                     if let error = model.errorMessage {
                         messageSection(error)
                     }
@@ -673,7 +688,7 @@ struct TranslationView: View {
                     bilingualList
                 } else if !model.result.isEmpty {
                     // 单词释义条目多，用正文字号；整句译文用大一号方便阅读
-                    LineStack(text: model.result, font: isTerm ? Theme.body : Theme.reading, color: .primary)
+                    LineStack(text: model.definitionText, font: isTerm ? Theme.body : Theme.reading, color: .primary)
                     if model.isLoading {
                         ProgressView()
                             .controlSize(.small)
@@ -685,6 +700,31 @@ struct TranslationView: View {
                 }
             }
         }
+    }
+
+    /// 「帮你记住」：拆词、近义词区别、反义词、搭配、易混词，再加上第一次在哪遇到这个词。
+    private func memorySection(_ memory: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                SectionLabel("帮你记住")
+                if model.lookupCount >= 3 {
+                    Text("第 \(model.lookupCount) 次查了，多看两眼")
+                        .font(Theme.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            LineStack(text: memory, font: Theme.body, color: .primary)
+            if let seen = model.firstSeen {
+                let place = seen.origin.map { "，在\($0)" } ?? ""
+                Text("第一次遇到：\(seen.date.formatted(date: .abbreviated, time: .omitted))\(place)")
+                    .font(Theme.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.repeated.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var bilingualList: some View {

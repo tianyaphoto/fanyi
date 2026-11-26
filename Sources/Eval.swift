@@ -26,6 +26,8 @@ enum EvalMode {
         var pair: String? = nil
         /// 手动指定的目标语言代码（模拟浮窗上的「→ 语言」）
         var to: String? = nil
+        /// 附「帮你记住」（模拟设置里打开记忆方法）
+        var memory: Bool? = nil
     }
 
     struct Outcome: Codable {
@@ -65,7 +67,8 @@ enum EvalMode {
                                 let codes = (item.pair ?? "").split(separator: ",").compactMap { Language.find(String($0)) }
                                 let pair = codes.count == 2 ? LanguagePair(primary: codes[0], secondary: codes[1]) : .default
                                 let result = try await Translator.translate(text: item.text, scene: scene, pair: pair,
-                                                                            target: item.to.flatMap(Language.find))
+                                                                            target: item.to.flatMap(Language.find),
+                                                                            memory: item.memory ?? false)
                                 output = result.text
                                 attempts = result.attempts
                             }

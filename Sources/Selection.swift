@@ -70,7 +70,9 @@ enum SelectionReader {
                 if let text = nonEmpty(ax) { return text }
             }
         }
-        if case .text = ax, !forceCopy { return nil }
+        // 以前辅助功能回答“空选区”时，划词手势直接放弃；但 Chrome 网页、Electron 等常把真实选区报成空，
+        // 于是只有 ⌥D 能翻、鼠标划词没反应（用户反馈）。现在照样走拷贝兜底：menuIfEnabled 只在
+        // 「拷贝」菜单可用时才拷，菜单是灰的说明真没选中，不会乱拷。
 
         guard forceCopy || Settings.copyFallbackEnabled, !isSelf,
               front?.bundleIdentifier != "com.apple.finder" else { return nil }

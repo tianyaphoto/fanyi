@@ -181,5 +181,32 @@ enum Settings {
         UserDefaults.standard.bool(forKey: historyEnabledKey) && ProcessInfo.processInfo.environment["FANYI_DEMO_DIR"] == nil
     }
     static var screenshotVisionEnabled: Bool { UserDefaults.standard.bool(forKey: screenshotVisionKey) }
+
+    /// 「帮你记住」：查外语单词时，在释义后面附上拆词、近义词区别、反义词、搭配、易混词。
+    enum MemoryAid: String, CaseIterable, Identifiable {
+        case off, repeated, always
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .off: return "关闭"
+            case .repeated: return "同一个词查到第 3 次时"
+            case .always: return "每次查单词"
+            }
+        }
+    }
+    static let memoryAidKey = "memoryAid"
+    static var memoryAid: MemoryAid {
+        MemoryAid(rawValue: UserDefaults.standard.string(forKey: memoryAidKey) ?? "") ?? .off
+    }
+    /// 第几次查询时要不要附「帮你记住」（lookupCount 为 0 表示没记历史，按第一次算）。
+    static func wantsMemoryAid(lookupCount: Int) -> Bool {
+        // 演示截图（Debug.swift）不记历史，用 FANYI_DEMO_MEMORY=1 强制打开
+        if ProcessInfo.processInfo.environment["FANYI_DEMO_MEMORY"] != nil { return true }
+        switch memoryAid {
+        case .off: return false
+        case .always: return true
+        case .repeated: return lookupCount >= 3
+        }
+    }
 }
 

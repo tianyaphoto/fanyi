@@ -10,6 +10,8 @@ struct HistoryEntry: Codable, Identifiable, Hashable {
     /// 最近一次查询时的原句和来源
     var context: String?
     var origin: String?
+    /// 第一次查询时的来源（「帮你记住」里提示“第一次在哪遇到”）；旧记录没有这一项。
+    var firstOrigin: String?
 }
 
 /// 查词历史：保存在 ~/Library/Application Support/Fanyi/history.json，最近查询的排在前面。
@@ -48,8 +50,11 @@ final class HistoryStore {
             entry = entries.remove(at: index)
             entry.count += 1
             entry.lastAt = Date()
+            // 旧记录没有 firstOrigin：用覆盖前的上一次来源顶上
+            if entry.firstOrigin == nil { entry.firstOrigin = entry.origin ?? origin }
         } else {
             entry = HistoryEntry(text: text.trimmingCharacters(in: .whitespacesAndNewlines))
+            entry.firstOrigin = origin
         }
         if let context { entry.context = context }
         if let origin { entry.origin = origin }
@@ -57,6 +62,12 @@ final class HistoryStore {
         if entries.count > limit { entries.removeLast(entries.count - limit) }
         persist()
         return entry.count
+    }
+
+    /// 第一次查这个词的时间和来源。
+    func firstSeen(_ text: String) -> (date: Date, origin: String?)? {
+        let k = key(text)
+        return entries.first(where: { key($0.text) == k }).map { ($0.firstAt, $0.firstOrigin) }
     }
 
     func updateTranslation(_ text: String, translation: String) {

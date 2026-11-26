@@ -52,6 +52,11 @@ final class Coordinator {
         monitor.onActivity = { [weak self] in self?.icon.hide() }
         monitor.start()
 
+        // 划词自测：在指定屏幕坐标模拟双击选词，看划词手势能不能读到文字（会出小图标）
+        if let point = DragSelfTest.point {
+            DragSelfTest.run(at: point, monitor: monitor)
+            return
+        }
         // 点击自测要真实的全局监听，但不注册快捷键（免得和正在用的 App 抢）
         if let button = ClickSelfTest.button {
             ClickSelfTest.run(button, popup: popup)

@@ -1,0 +1,91 @@
+[
+ {
+  "text": "redundant",
+  "target": "zh",
+  "memory": true,
+  "must": [
+   "【帮你记住】",
+   "拆开记",
+   "近义词"
+  ],
+  "forbid": []
+ },
+ {
+  "text": "essential",
+  "target": "zh",
+  "memory": true,
+  "must": [
+   "【帮你记住】",
+   "近义词"
+  ],
+  "forbid": []
+ },
+ {
+  "text": "affect",
+  "target": "zh",
+  "memory": true,
+  "must": [
+   "【帮你记住】",
+   "effect"
+  ],
+  "forbid": []
+ },
+ {
+  "text": "mitigate",
+  "target": "zh",
+  "memory": true,
+  "must": [
+   "【帮你记住】",
+   "搭配"
+  ],
+  "forbid": []
+ },
+ {
+  "text": "take over",
+  "target": "zh",
+  "memory": true,
+  "must": [
+   "【帮你记住】"
+  ],
+  "forbid": []
+ },
+ {
+  "text": "premium",
+  "target": "zh",
+  "memory": true,
+  "must": [
+   "【帮你记住】"
+  ],
+  "forbid": []
+ },
+ {
+  "text": "保费",
+  "target": "any",
+  "memory": true,
+  "forbid": [
+   "【帮你记住】"
+  ],
+  "must": [
+   "premium"
+  ]
+ },
+ {
+  "text": "redundant",
+  "target": "zh",
+  "must": [
+   "冗余|多余"
+  ],
+  "forbid": [
+   "【帮你记住】"
+  ]
+ },
+ {
+  "text": "The service is redundant across two regions.",
+  "target": "zh",
+  "memory": true,
+  "forbid": [
+   "【帮你记住】"
+  ],
+  "must": []
+ }
+]

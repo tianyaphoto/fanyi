@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage(Settings.copyFallbackKey) private var copyFallback = true
     @AppStorage(Settings.enhancedAccessibilityKey) private var enhancedAccessibility = true
     @AppStorage(Settings.historyEnabledKey) private var historyEnabled = true
+    @AppStorage(Settings.memoryAidKey) private var memoryAid = Settings.MemoryAid.off
     @AppStorage(Settings.screenshotVisionKey) private var screenshotVision = false
     @AppStorage(ClipboardHistory.enabledKey) private var clipboardHistory = true
     @AppStorage(Settings.modelKey(for: .deepseek)) private var deepSeekModel = Settings.deepSeekModels[0]
@@ -191,6 +192,13 @@ struct SettingsView: View {
                 }
             } footer: {
                 note("点击后按下新的组合键（需包含 ⌘、⌥ 或 ⌃），Esc 取消。")
+            }
+
+            Section("帮你记住单词") {
+                Picker("附上记忆方法", selection: $memoryAid) {
+                    ForEach(Settings.MemoryAid.allCases) { Text($0.title).tag($0) }
+                }
+                note("查外语单词时，在释义下面加一块「帮你记住」：词根拆解、近义词和区别、反义词、常用搭配、易混词，并提示第一次在哪遇到它。只对单词和短语生效；模型要多写一两百字，会稍慢、稍贵。「查到第 3 次时」需要开着查词历史。收藏到生词本时会一起保存。")
             }
 
             Section("查词历史") {

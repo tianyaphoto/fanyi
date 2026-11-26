@@ -45,12 +45,41 @@ enum Translator {
         return "\n\n上面的例子用中英互译演示规则。这次的方向是\(from)译成\(plan.target.promptName)：译文只用\(plan.target.promptName)，规则完全相同。"
     }
 
-    private static func termRules(_ plan: TranslationPlan) -> String {
-        """
+    private static func termRules(_ plan: TranslationPlan, memory: Bool) -> String {
+        var rules = """
         这次的 <text> 是单个单词或短语，按词典条目输出（用\(plan.target.promptName)释义，所有说明文字都用\(plan.target.promptName)）：
         - 英文等有音标的单词第一行给出音标（日文给出假名读音）；然后按词性列出常用释义；最后给 1–2 个简短例句，每个例句附\(plan.target.promptName)译文。
         - 如果提供了 <context>（这个词所在的原句），第一行先写「语境：」加上它在这句话里的具体含义，再给音标和常用释义。不要翻译整句 <context>。
         - 用纯文本，不用 Markdown 符号。
+        """
+        if memory { rules += "\n\n" + memoryRules(plan) }
+        return rules
+    }
+
+    /// 「帮你记住」在输出里的分隔行，界面按它把释义和记忆材料分开显示。
+    static let memoryMarker = "【帮你记住】"
+
+    /// 把输出拆成释义和「帮你记住」两部分；没有分隔行时第二部分为 nil。
+    static func splitMemory(_ output: String) -> (definition: String, memory: String?) {
+        guard let range = output.range(of: memoryMarker) else { return (output, nil) }
+        let definition = output[..<range.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+        let memory = output[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        return (definition, memory)
+    }
+
+    private static func memoryRules(_ plan: TranslationPlan) -> String {
+        let zh = plan.target.code.hasPrefix("zh")
+        let labels = zh
+            ? "拆开记、近义词、反义词、搭配、易混词"
+            : "the same five labels (word parts, synonyms, antonym, collocations, easily confused) written in \(plan.target.promptName)"
+        return """
+        词典条目写完后，另起一行，原样输出“\(memoryMarker)”这几个字（不翻译、不加别的符号），下面写帮助记住这个词的材料。只写真正有用的，每项一行，宁缺毋滥，用\(plan.target.promptName)说明，每行以标签加冒号开头，标签用：\(labels)。
+        - 拆开记：能按词根、词缀拆的才写，拆完用一句话串成好记的意思（例：redundant = re 再 + und 波浪 → 浪涌出来 → 多余的）。拆不了或词源牵强就不写这一行，不编造词源，不用谐音。
+        - 近义词：1–2 个最常被拿来比较的，每个用半句话说清和本词的区别（例：necessary — 只是“需要”，essential 是“缺了就不成立”）。
+        - 反义词：最常用的 1 个；没有自然的反义词就不写。
+        - 搭配：2–3 个最常用的固定搭配，用分号隔开，不附翻译。
+        - 易混词：只在确实存在拼写或发音相近、容易用错的词时写（例：affect / effect），附半句区别；没有就不写。
+        - 如果提供了 <context>，可以最后加一行「记忆钩子：」，用原句里的场景帮记，一句话；原句平淡就不写。
         """
     }
 
@@ -127,12 +156,12 @@ enum Translator {
     /// 拼出系统提示和用户消息：铁律 + 模式规则 + 场景要求 + 术语表 / 资料片段 (+ 重翻时的纠正说明)。
     private static func makeRequest(text: String, context: String?, image: ImageAttachment?,
                                     scene: TranslationScene?, retrieval: Retrieval,
-                                    plan: TranslationPlan, correction: String?) -> Request {
+                                    plan: TranslationPlan, correction: String?, memory: Bool = false) -> Request {
         var system: String
         if image != nil {
             system = visionPrompt(plan)
         } else {
-            system = ironRules(plan) + "\n\n" + (plan.mode == .term ? termRules(plan) : passageRules(plan))
+            system = ironRules(plan) + "\n\n" + (plan.mode == .term ? termRules(plan, memory: memory) : passageRules(plan))
         }
         if let scene, !scene.instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             system += "\n\n当前场景：\(scene.name)。在不违反上面铁律和输出格式的前提下，遵守以下要求：\n\(scene.instructions)"
@@ -162,13 +191,14 @@ enum Translator {
 
     static func stream(text: String, context: String? = nil, image: ImageAttachment? = nil,
                        scene: TranslationScene? = nil, retrieval: Retrieval = .empty,
-                       plan: TranslationPlan? = nil, correction: String? = nil) -> AsyncThrowingStream<String, Error> {
+                       plan: TranslationPlan? = nil, correction: String? = nil,
+                       memory: Bool = false) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     let request = makeRequest(text: text, context: context, image: image, scene: scene,
                                               retrieval: retrieval, plan: plan ?? TranslationPlan(text),
-                                              correction: correction)
+                                              correction: correction, memory: memory)
                     try await run(request) { continuation.yield($0) }
                     continuation.finish()
                 } catch {

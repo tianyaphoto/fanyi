@@ -206,6 +206,39 @@ enum ClickSelfTest {
     }
 }
 
+/// 开发用：FANYI_DRAG_SELFTEST="x,y"（左上角为原点的屏幕坐标）在那里模拟一次鼠标双击选词，
+/// 走真实的划词手势流程，打印读到的文字（读到就是会出小图标）。需要辅助功能权限；鼠标会被移动。
+enum DragSelfTest {
+    static var point: CGPoint? {
+        guard let raw = ProcessInfo.processInfo.environment["FANYI_DRAG_SELFTEST"] else { return nil }
+        let parts = raw.split(separator: ",").compactMap { Double($0) }
+        return parts.count == 2 ? CGPoint(x: parts[0], y: parts[1]) : nil
+    }
+
+    @MainActor
+    static func run(at point: CGPoint, monitor: SelectionMonitor) {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        monitor.onSelection = { capture, _ in
+            print("划词读到：\(capture.text)")
+            exit(0)
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(800))
+            for click in 1...2 {
+                for type in [CGEventType.leftMouseDown, .leftMouseUp] {
+                    let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)
+                    event?.setIntegerValueField(.mouseEventClickState, value: Int64(click))
+                    event?.post(tap: .cghidEventTap)
+                    try? await Task.sleep(for: .milliseconds(40))
+                }
+            }
+            try? await Task.sleep(for: .seconds(3))
+            print("划词没有读到文字（不会出小图标）")
+            exit(1)
+        }
+    }
+}
+
 /// 开发用：探测辅助功能接口在当前环境（例如沙盒）里能读到什么。
 ///
 ///     FANYI_AX_PROBE=<目标 App 的 Bundle ID> /Applications/Fanyi.app/Contents/MacOS/Fanyi
