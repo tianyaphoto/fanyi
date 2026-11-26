@@ -4,7 +4,7 @@
 # 用法：tools/bump-cask.sh [版本号]   不写版本号时用 project.yml 里的 MARKETING_VERSION
 set -euo pipefail
 cd "$(dirname "$0")/.."
-VERSION="${1:-$(awk -F'"' '/MARKETING_VERSION/ {print $2; exit}' project.yml)}"
+VERSION="${1:-$(awk -F'"' '/MARKETING_VERSION:/ {print $2; exit}' project.yml)}"
 TAP="${TAP_DIR:-$HOME/Documents/projects/homebrew-tap}"
 [[ -d "$TAP/.git" ]] || git clone -q https://github.com/tianyaphoto/homebrew-tap.git "$TAP"
 git -C "$TAP" pull -q --ff-only
