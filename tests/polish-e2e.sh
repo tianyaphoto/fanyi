@@ -1,7 +1,8 @@
 #!/bin/bash
 # 一键改写的端到端测试：打开一个测试记事本窗口，用已安装（已授权辅助功能）的翻译神器改写其中的文字，
 # 打印诊断日志和窗口里的最终内容。测试期间窗口会到最前面约半分钟，请不要操作键盘鼠标；屏幕锁定时无法运行。
-# 用法：tests/polish-e2e.sh [field|clipboard]
+# 用法：tests/polish-e2e.sh [field|clipboard|tone]
+#   tone：改写输入框后，再按一次快捷键（换下一种语气）→ 点「更简短」→ 撤回，每步打印输入框内容；最后应该回到原文。
 set -euo pipefail
 cd "$(dirname "$0")"
 MODE="${1:-field}"
@@ -25,7 +26,9 @@ fi
 open -n "$WORK/TestPad.app" --args "$WORK/in.txt" "$WORK/out.txt" -1 45
 sleep 1.5
 open "$WORK/TestPad.app"
-FANYI_POLISH_SELFTEST="$MODE" FANYI_SELFTEST_BUNDLE=local.fanyi.testpad FANYI_SELFTEST_CLIPBOARD="$WORK/clip.txt" \
+STEPS=""
+if [[ "$MODE" == "tone" ]]; then MODE=field; STEPS="again,concise,revert"; fi
+FANYI_SELFTEST_STEPS="$STEPS" FANYI_POLISH_SELFTEST="$MODE" FANYI_SELFTEST_BUNDLE=local.fanyi.testpad FANYI_SELFTEST_CLIPBOARD="$WORK/clip.txt" \
   /Applications/Fanyi.app/Contents/MacOS/Fanyi || true
 for _ in $(seq 1 60); do [[ -f "$WORK/out.txt" ]] && break; sleep 1; done
 echo "--- 原文："; cat "$WORK/in.txt"; echo

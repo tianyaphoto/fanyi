@@ -217,6 +217,8 @@ enum Translator {
         case .openAICompatible: try await runOpenAI(request, provider: provider, onText: onText)
         case .bedrockInvoke: try await runBedrockInvoke(request, provider: provider, onText: onText)
         case .cli: try await runClaudeCLI(request, onText: onText)
+        case .system:
+            throw TranslateError(message: "系统翻译只能翻译，这个功能要用大模型服务。请在设置里配置一个（例如 DeepSeek、Claude、OpenAI）。", needsSetup: true)
         }
     }
 

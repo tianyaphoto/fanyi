@@ -3,6 +3,25 @@
     <channel>
         <title>Fanyi</title>
         <item>
+            <title>1.9</title>
+            <pubDate>Sat, 28 Nov 2026 09:21:18 +0800</pubDate>
+            <link>https://tianyaphoto.github.io/fanyi/</link>
+            <sparkle:version>10</sparkle:version>
+            <sparkle:shortVersionString>1.9</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h3>翻译神器 1.9</h3>
+<ul>
+  <li><b>改写后看得见改了哪里，还能撤回、换语气</b>：一键改写替换完成后，输入框旁边出现一个小浮窗，删掉的字标红、加上的字标绿。点「撤回」恢复原文；点「更正式 / 更简短 / 更口语」，或者再按一次改写快捷键，换一种语气重新改写。不想要可以在设置 → 一键改写里关掉。</li>
+  <li><b>生词本导出到 Anki</b>：生词本底部「导出」→「发到 Anki」，卡片正面是原句和生词，背面是释义和「帮你记住」。需要 Anki 开着并装了 AnkiConnect 插件（代码 2055492159）；没装也可以导出成文件再导入。</li>
+  <li><b>今日复习与统计</b>：菜单「今日复习」每天抽 5 个到期的生词，先看原句回想，再翻开看释义。同一个窗口里能看到最近 7 天查了多少词、反复查的是哪些词。</li>
+  <li><b>截图识别文字（只复制）</b>：按 ⌥⇧S 框选，识别出的文字直接进剪贴板，不翻译、不弹窗。</li>
+  <li><b>不配 API Key 也能翻译</b>：翻译服务里新增「系统翻译」（macOS 15 起），在本机完成，新安装时默认用它。它只会翻译；语境释义、帮你记住、一键改写仍然需要大模型服务。已经配好服务的不受影响。</li>
+  <li><b>匿名统计使用台数</b>：每天检查更新时，App 会带上自己的版本号，更新服务器据此统计“今天有多少台机器在用”。不保存 IP 地址，不含任何翻译内容；在设置里关掉自动检查更新就不会发送。统计服务不通时会自动改用原来的地址，不影响更新。</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.9/Fanyi.zip" length="3187106" type="application/octet-stream" sparkle:edSignature="YlOkPf55T9RRKzBzcmnjMgmZNrmRC8uetKSKgBX5XbkBueBNqCl675W80S6JihXP7nwjE9vzVaBZqiDCzASbAg=="/>
+        </item>
+        <item>
             <title>1.8</title>
             <pubDate>Thu, 26 Nov 2026 21:55:46 +0800</pubDate>
             <link>https://tianyaphoto.github.io/fanyi/</link>
@@ -30,21 +49,6 @@
 </ul>
 ]]></description>
             <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.7/Fanyi.zip" length="2879630" type="application/octet-stream" sparkle:edSignature="AHTJHOVf0V1X7cEAUtOKSiDjSKl7bRd50z0x15T1IYvRVKF77o1XG8rLzAN6hm/3HRyOrVrzX+M0W2IKfZniAg=="/>
-        </item>
-        <item>
-            <title>1.6</title>
-            <pubDate>Thu, 26 Nov 2026 12:22:03 +0800</pubDate>
-            <link>https://tianyaphoto.github.io/fanyi/</link>
-            <sparkle:version>7</sparkle:version>
-            <sparkle:shortVersionString>1.6</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h3>翻译神器 1.6</h3>
-<ul>
-  <li><b>静默自动更新</b>：以后有新版本会在后台下载、校验签名，等你 2 分钟没操作（且没开着浮窗、没在改写）时自动替换并重启，不再弹窗；退出时也会装好。设置 →「更新」关掉「自动下载并安装」可改回弹窗确认。这次升级还需要你点一次「安装」，之后就全自动了。</li>
-  <li><b>DeepSeek 模型改为下拉选择</b>：deepseek-flash（默认，快）或 deepseek-v4-pro（更强，较慢）。以前手填的旧模型名（如 deepseek-chat）会自动换成 deepseek-flash。</li>
-</ul>
-]]></description>
-            <enclosure url="https://github.com/tianyaphoto/fanyi/releases/download/v1.6/Fanyi.zip" length="2852028" type="application/octet-stream" sparkle:edSignature="QuEyj8V/bdrRbitxxoLrp+7QH1drGXzLPOTMfvr82oHPH2y+SNY0ka6dmgN32P8U4C4l8qoD8XXax03mwhnKAA=="/>
         </item>
     </channel>
 </rss>

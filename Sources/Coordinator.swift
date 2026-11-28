@@ -14,6 +14,10 @@ final class Coordinator {
     private var capturing = false
 
     func start() {
+        if let name = SelfTest.name {
+            SelfTest.run(name)
+            return
+        }
         if let target = AXProbe.target {
             AXProbe.run(target)
             return
@@ -75,6 +79,7 @@ final class Coordinator {
         case .polishField: PolishCoordinator.shared.polishField()
         case .polishClipboard: PolishCoordinator.shared.polishClipboard()
         case .clipboardHistory: ClipboardPanelController.shared.toggle()
+        case .ocrCopy: captureAndCopyText()
         }
     }
 
@@ -105,10 +110,31 @@ final class Coordinator {
 
     // MARK: 截图翻译
 
-    func captureAndTranslate() {
+    func captureAndTranslate() { capture(copyOnly: false) }
+
+    /// 截图识别文字，直接放进剪贴板：不翻译、不弹浮窗，只在屏幕上方提示一下。
+    func captureAndCopyText() { capture(copyOnly: true) }
+
+    /// 把识别出的文字放进剪贴板并提示。返回提示文字（自测用）。
+    @discardableResult
+    static func copyRecognized(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            Toast.shared.show("截图中没有识别到文字", style: .warning)
+            return "截图中没有识别到文字"
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(trimmed, forType: .string)
+        let preview = trimmed.replacingOccurrences(of: "\n", with: " ")
+        let message = "已复制识别出的 \(trimmed.count) 个字：\(preview.prefix(40))\(preview.count > 40 ? "…" : "")"
+        Toast.shared.show(message)
+        return message
+    }
+
+    private func capture(copyOnly: Bool) {
         guard !capturing else { return }
         icon.hide()
-        popup.close()
+        if !copyOnly { popup.close() }
 
         if !CGPreflightScreenCaptureAccess() && !CGRequestScreenCaptureAccess() {
             popup.showMessage("需要「屏幕录制」权限才能截图翻译。请在 系统设置 → 隐私与安全性 → 录屏与系统录音 中允许本 App，然后重新打开 App。", near: NSEvent.mouseLocation)
@@ -121,7 +147,7 @@ final class Coordinator {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         process.arguments = ["-i", "-x", url.path] // -i 交互式框选，-x 静音
-        let useVision = Settings.screenshotVisionEnabled && Settings.provider.supportsVision
+        let useVision = !copyOnly && Settings.screenshotVisionEnabled && Settings.provider.supportsVision
         process.terminationHandler = { _ in
             let shot = Self.readScreenshot(at: url, withImage: useVision)
             try? FileManager.default.removeItem(at: url)
@@ -131,7 +157,9 @@ final class Coordinator {
                     coordinator.capturing = false
                     let point = NSEvent.mouseLocation
                     guard let shot else { return } // 用户按 Esc 取消了截图
-                    if shot.text.isEmpty && shot.image == nil {
+                    if copyOnly {
+                        Coordinator.copyRecognized(shot.text)
+                    } else if shot.text.isEmpty && shot.image == nil {
                         coordinator.popup.showMessage("截图中没有识别到文字。", near: point)
                     } else {
                         coordinator.popup.show(Capture(text: shot.text, source: source ?? SourceInfo(suffix: "（截图）"),

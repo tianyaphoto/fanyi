@@ -9,6 +9,7 @@ struct FanyiApp: App {
         || ProcessInfo.processInfo.environment["FANYI_CLIPHIST_SELFTEST"] != nil
         || ProcessInfo.processInfo.environment["FANYI_CLICK_SELFTEST"] != nil
         || ProcessInfo.processInfo.environment["FANYI_AX_PROBE"] != nil
+        || ProcessInfo.processInfo.environment["FANYI_SELFTEST"] != nil
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
@@ -27,10 +28,12 @@ struct FanyiApp: App {
 private struct MenuContent: View {
     private var shortcuts: ShortcutCenter { .shared }
     private var polish: PolishCoordinator { .shared }
+    private var dueToday: Int { VocabularyStore.shared.todayQueue().count }
 
     var body: some View {
         Button("输入翻译" + suffix(.input)) { Coordinator.shared.showInput() }
         Button("截图翻译" + suffix(.screenshot)) { Coordinator.shared.captureAndTranslate() }
+        Button("截图识别文字（只复制）" + suffix(.ocrCopy)) { Coordinator.shared.captureAndCopyText() }
         Text(shortcuts.display(for: .selection).map { "划词后点击小图标，或按 \($0) 翻译选中文字" } ?? "划词后点击小图标翻译选中文字")
         Divider()
         Button("改写当前输入框" + suffix(.polishField)) { PolishCoordinator.shared.polishField() }
@@ -38,6 +41,8 @@ private struct MenuContent: View {
         if polish.isRunning {
             Button("取消改写") { polish.cancel() }
         }
+        Button("撤回上次改写") { polish.revert() }
+            .disabled(!polish.canRevert || polish.isRunning)
         Button("复制上次改写结果") { polish.copyLastResult() }
             .disabled(polish.lastResult == nil)
         Button("复制上次改写原文") { polish.copyLastOriginal() }
@@ -46,6 +51,8 @@ private struct MenuContent: View {
         Button("剪贴板历史" + suffix(.clipboardHistory)) { ClipboardPanelController.shared.show() }
         Divider()
         Button("生词本") { Windows.showVocabulary() }
+        Button(dueToday > 0 ? "今日复习（\(dueToday)）" : "今日复习与统计") { Windows.showReview() }
+        Text(LearningStats.menuLine)
         Button("查词历史") { Windows.showHistory() }
         Button("场景与资料库…") { Windows.showLibrary() }
         Button("设置…") { Windows.showSettings() }
@@ -106,6 +113,27 @@ enum Windows {
     static func showHistory() {
         show(id: "history", title: "查词历史", size: NSSize(width: 780, height: 520), resizable: true) {
             HistoryView()
+        }
+    }
+
+    static func showReview() {
+        // 每次打开都重新抽今天的词
+        windows["review"]?.close()
+        windows["review"] = nil
+        show(id: "review", title: "今日复习与统计", size: NSSize(width: 720, height: 500), resizable: true) {
+            ReviewView()
+        }
+    }
+
+    /// 下载系统翻译的语言包（macOS 15 起才会走到这里）。
+    static func showLanguagePackDownload(_ missing: LanguagePackMissing, onDone: @escaping () -> Void) {
+        guard #available(macOS 15.0, *) else { return }
+        windows["languagePack"]?.close()
+        windows["languagePack"] = nil
+        show(id: "languagePack", title: "系统翻译", size: NSSize(width: 420, height: 190), resizable: false) {
+            LanguagePackDownloadView(missing: missing, onDone: onDone) {
+                windows["languagePack"]?.close()
+            }
         }
     }
 

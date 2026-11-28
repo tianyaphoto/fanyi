@@ -13,6 +13,8 @@ struct SettingsView: View {
     @AppStorage(Settings.modelKey(for: .deepseek)) private var deepSeekModel = Settings.deepSeekModels[0]
     @AppStorage(Settings.bedrockGatewayAuthKey) private var gatewayAuth = Settings.GatewayAuth.apiKey
     @AppStorage(PolishRules.spellingKey) private var spelling = PolishRules.Spelling.british
+    @AppStorage(PolishPanelController.enabledKey) private var polishShowChanges = true
+    @AppStorage(ReviewReminder.enabledKey) private var reviewReminder = true
     @AppStorage(PolishRules.translateInstructionsKey) private var translateInstructions = ""
     @AppStorage(PolishRules.polishInstructionsKey) private var polishInstructions = ""
     @AppStorage(Settings.primaryLanguageKey) private var primaryLanguage = Language.chinese.code
@@ -31,12 +33,14 @@ struct SettingsView: View {
         Form {
             Section("翻译服务") {
                 Picker("服务", selection: $provider) {
-                    ForEach(Provider.allCases) { Text($0.title).tag($0) }
+                    ForEach(Provider.available) { Text($0.title).tag($0) }
                 }
                 .onChange(of: provider) { _, value in apiKey = APIKeyStore.apiKey(for: value) ?? "" }
 
                 Group {
                     switch provider {
+                    case .apple:
+                        note("用 macOS 自带的翻译，在本机完成，不用 API Key，也不把文字发到网上。只会翻译：没有语境释义、「帮你记住」、翻译场景、术语表、看图翻译和一键改写，这些要换成下面任一个大模型服务。第一次翻某种语言时要下载语言包：翻译浮窗会给「下载语言包」按钮，点一下、在系统的确认框里点「下载」即可（也可以在 系统设置 → 通用 → 语言与地区 → 翻译语言 里下载）。")
                     case .claude:
                         keyField(prompt: "sk-ant-…")
                         urlField()
@@ -138,6 +142,7 @@ struct SettingsView: View {
                 Picker("英文拼写", selection: $spelling) {
                     ForEach(PolishRules.Spelling.allCases) { Text($0.title).tag($0) }
                 }
+                Toggle("改写后显示改了哪里（可撤回、换语气）", isOn: $polishShowChanges)
                 instructionsEditor("中文译成英文时的额外要求", text: $translateInstructions,
                                    placeholder: "例如：保留产品名 GrabPay 不翻译；称呼同事用名字")
                 instructionsEditor("英文纠错润色时的额外要求", text: $polishInstructions,
@@ -199,6 +204,18 @@ struct SettingsView: View {
                     ForEach(Settings.MemoryAid.allCases) { Text($0.title).tag($0) }
                 }
                 note("查外语单词时，在释义下面加一块「帮你记住」：词根拆解、近义词和区别、反义词、常用搭配、易混词，并提示第一次在哪遇到它。只对单词和短语生效；模型要多写一两百字，会稍慢、稍贵。「查到第 3 次时」需要开着查词历史。收藏到生词本时会一起保存。")
+            }
+
+            Section("生词复习") {
+                Toggle("每天提醒一次有生词该复习了", isOn: $reviewReminder)
+                HStack {
+                    Text("每天从生词本抽 \(VocabularyStore.dailyLimit) 个到期的词：先看原句回想，再翻开看释义。")
+                        .font(Theme.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("打开…") { Windows.showReview() }
+                }
+                note("新收藏的词第二天开始出现；记得的词隔 1、3、7、14、30 天再出现，全部记得就标记为已掌握。提醒是屏幕上方的一条短提示，每天第一次翻译时出现，不抢焦点。想认真背，可以在生词本里导出到 Anki。")
             }
 
             Section("查词历史") {

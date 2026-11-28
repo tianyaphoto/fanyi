@@ -1,7 +1,9 @@
 import AppKit
 import Sparkle
 
-/// 自动更新（Sparkle 2）。启动后按设置每天检查一次 GitHub Pages 上的更新信息（appcast.xml）。
+/// 自动更新（Sparkle 2）。启动后按设置每天检查一次更新信息（appcast.xml）。
+/// 更新信息先从计数服务取（Cloudflare，原样转发 GitHub Pages 上的那份，顺便数一下当天有多少台机器在用，
+/// 只带版本号，见 cloudflare/README.md）；取不到就改从 GitHub Pages 直接取一次，计数服务挂了不影响更新。
 /// 默认（SUAutomaticallyUpdate）发现新版就在后台下载、校验签名；菜单栏 App 很少退出，所以下载好后
 /// 等用户空闲（2 分钟没操作、没有浮窗/设置窗、没在改写）时静默替换并重启，退出时也会装。
 /// 关掉「自动下载并安装」则回到弹窗模式：显示更新说明，点「安装」后下载、替换并重启。设置和数据都在
@@ -16,6 +18,9 @@ final class Updater: NSObject, SPUStandardUserDriverDelegate, SPUUpdaterDelegate
     @ObservationIgnored private var observation: NSKeyValueObservation?
     @ObservationIgnored private var pendingInstall: (() -> Void)?
     @ObservationIgnored private var idleTimer: Timer?
+    /// 这一轮检查改用 GitHub Pages 上的原始地址（Info.plist 的 SUFeedURL）。
+    @ObservationIgnored private var usingFallbackFeed = false
+    private static let countingFeed = "https://fanyi-updates.pages.dev/appcast.xml"
 
     /// 开发运行（评测、演示截图）和没配公钥的本机编译版不启动更新。
     var isAvailable: Bool { controller != nil }
@@ -66,6 +71,33 @@ final class Updater: NSObject, SPUStandardUserDriverDelegate, SPUUpdaterDelegate
     }
 
     // MARK: SPUUpdaterDelegate
+
+    /// 返回 nil 时 Sparkle 用 Info.plist 里的 SUFeedURL（GitHub Pages）。
+    nonisolated func feedURLString(for updater: SPUUpdater) -> String? {
+        MainActor.assumeIsolated {
+            guard !usingFallbackFeed else { return nil }
+            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+            return "\(Self.countingFeed)?v=\(version)"
+        }
+    }
+
+    /// 计数服务取不到或返回的内容读不懂：马上改从 GitHub Pages 再查一次；下一轮仍先试计数服务。
+    /// 实测取不到更新信息时 Sparkle 报的是 downloadError（2001），和安装包下载失败同一个码，所以那种情况也会多查一次，无害。
+    nonisolated func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?) {
+        let nsError = error as NSError?
+        let feedFailed = nsError?.domain == SUSparkleErrorDomain
+            && [SUError.downloadError, .appcastError, .appcastParseError].map { Int($0.rawValue) }.contains(nsError?.code ?? 0)
+        MainActor.assumeIsolated {
+            if usingFallbackFeed {
+                usingFallbackFeed = false
+            } else if feedFailed {
+                usingFallbackFeed = true
+                DiagnosticsLog.shared.add("自动更新：计数服务取不到更新信息，改从 GitHub Pages 取")
+                // 必须在这个回调里当场发起：回调一返回 Sparkle 就开始排下一次定时检查，那之后再调会被当成“检查进行中”忽略。
+                updater.checkForUpdatesInBackground()
+            }
+        }
+    }
 
     /// 自动下载好的更新：接管安装时机，空闲时立即装（不弹任何窗口），而不是只等退出。
     nonisolated func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,

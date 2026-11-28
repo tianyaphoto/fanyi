@@ -4,9 +4,17 @@ import Security
 /// 翻译服务。
 enum Provider: String, CaseIterable, Identifiable {
     case claude, bedrock, bedrockGateway, openai, deepseek, qwen, custom, claudeCLI
+    /// 系统翻译（macOS 15 起）：本机完成，不用配置；只会翻译，不能改写。
+    case apple
 
     /// 接口格式：同一种格式的服务共用一套请求代码。
-    enum Kind { case anthropic, openAICompatible, bedrockInvoke, cli }
+    enum Kind { case anthropic, openAICompatible, bedrockInvoke, cli, system }
+
+    /// 这台 Mac 上能选的服务（系统翻译要 macOS 15）。
+    static var available: [Provider] { allCases.filter { $0 != .apple || SystemTranslator.isSupported } }
+
+    /// 是大模型服务（有语境释义、帮你记住、场景、术语表、一键改写）。
+    var isLLM: Bool { self != .apple }
 
     var id: String { rawValue }
 
@@ -20,6 +28,7 @@ enum Provider: String, CaseIterable, Identifiable {
         case .qwen: return "通义千问"
         case .custom: return "自定义（OpenAI 兼容）"
         case .claudeCLI: return "claude -p"
+        case .apple: return "系统翻译（免费，不用配置）"
         }
     }
 
@@ -29,19 +38,21 @@ enum Provider: String, CaseIterable, Identifiable {
         case .openai, .deepseek, .qwen, .custom: return .openAICompatible
         case .bedrockGateway: return .bedrockInvoke
         case .claudeCLI: return .cli
+        case .apple: return .system
         }
     }
 
     /// 默认模型能否接收图片（看图翻译）。不能时截图翻译退回本地识别文字。
     var supportsVision: Bool {
         switch self {
-        case .deepseek, .qwen: return false
+        case .deepseek, .qwen, .apple: return false
         default: return true
         }
     }
 
     /// 是否已经配置到可以直接使用。
     var isConfigured: Bool {
+        if self == .apple { return SystemTranslator.isSupported }
         guard !Settings.model(for: self).isEmpty else { return false }
         switch self {
         case .claudeCLI: return true
@@ -114,7 +125,7 @@ enum Settings {
         case .openai: return "https://api.openai.com/v1"
         case .deepseek: return "https://api.deepseek.com"
         case .qwen: return "https://dashscope.aliyuncs.com/compatible-mode/v1"
-        case .bedrock, .bedrockGateway, .custom, .claudeCLI: return ""
+        case .bedrock, .bedrockGateway, .custom, .claudeCLI, .apple: return ""
         }
     }
 
@@ -139,6 +150,17 @@ enum Settings {
             UserDefaults.standard.removeObject(forKey: deepSeekKey)
         }
         UserDefaults.standard.register(defaults: defaults)
+        chooseInitialProvider()
+    }
+
+    /// 第一次启动、还没选过服务时：已经填了 Claude 的 Key（老用户一直用默认的 Claude）就保持 Claude；
+    /// 否则用系统翻译，装上就能翻。选定后写进设置，之后不再自动变。
+    private static func chooseInitialProvider() {
+        guard !FanyiApp.isDevRun,
+              let domain = Bundle.main.bundleIdentifier,
+              UserDefaults.standard.persistentDomain(forName: domain)?[providerKey] == nil else { return }
+        let initial: Provider = Provider.claude.isConfigured || !SystemTranslator.isSupported ? .claude : .apple
+        UserDefaults.standard.set(initial.rawValue, forKey: providerKey)
     }
 
     private static func string(_ key: String, default fallback: String) -> String {
@@ -147,7 +169,9 @@ enum Settings {
     }
 
     static var provider: Provider {
-        Provider(rawValue: UserDefaults.standard.string(forKey: providerKey) ?? "") ?? .claude
+        // 开发自测：FANYI_PROVIDER=apple 临时换服务，不改用户的设置
+        if let forced = ProcessInfo.processInfo.environment["FANYI_PROVIDER"].flatMap(Provider.init) { return forced }
+        return Provider(rawValue: UserDefaults.standard.string(forKey: providerKey) ?? "") ?? .claude
     }
 
     static var bedrockRegion: String { string(bedrockRegionKey, default: defaultBedrockRegion) }

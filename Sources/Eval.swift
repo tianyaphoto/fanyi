@@ -26,6 +26,8 @@ enum EvalMode {
         var pair: String? = nil
         /// 手动指定的目标语言代码（模拟浮窗上的「→ 语言」）
         var to: String? = nil
+        /// 一键改写的语气：formal / concise / casual；不写是标准语气
+        var tone: String? = nil
         /// 附「帮你记住」（模拟设置里打开记忆方法）
         var memory: Bool? = nil
     }
@@ -61,7 +63,7 @@ enum EvalMode {
                         var output = "", attempts = 0, problems: [String] = []
                         do {
                             if item.mode == "polish" {
-                                output = try await PolishService.process(item.text)
+                                output = try await PolishService.process(item.text, tone: item.tone.flatMap(PolishRules.Tone.init) ?? .standard)
                                 attempts = 1
                             } else {
                                 let codes = (item.pair ?? "").split(separator: ",").compactMap { Language.find(String($0)) }

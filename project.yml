@@ -21,8 +21,12 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
+        # 允许不加密地连本机服务：Anki 的 AnkiConnect（http://127.0.0.1:8765）、本机的 Ollama
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         NSHumanReadableCopyright: ""
-        # 自动更新（Sparkle）：更新信息放在 GitHub Pages 主页，安装包在 GitHub Release
+        # 自动更新（Sparkle）：更新信息放在 GitHub Pages 主页，安装包在 GitHub Release。
+        # App 实际先请求计数服务（Sources/Updater.swift 的 countingFeed），取不到才用下面这个地址
         SUFeedURL: https://tianyaphoto.github.io/fanyi/appcast.xml
         SUPublicEDKey: xAKDG7ymGAvqy8jrceLh/Z9KuLf5VT3L7SnPKwoJOm0=
         SUEnableAutomaticChecks: true
@@ -33,8 +37,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.local.fanyi
         PRODUCT_NAME: Fanyi
-        MARKETING_VERSION: "1.8"
-        CURRENT_PROJECT_VERSION: "9"
+        MARKETING_VERSION: "1.9"
+        CURRENT_PROJECT_VERSION: "10"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Manual

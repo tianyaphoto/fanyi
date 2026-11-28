@@ -1,0 +1,9 @@
+// 更新检查计数（Cloudflare Pages + D1）。说明见 cloudflare/README.md。
+{
+  "name": "fanyi-updates",
+  "pages_build_output_dir": "public",
+  "compatibility_date": "2026-03-01",
+  "d1_databases": [
+    { "binding": "DB", "database_name": "fanyi-stats", "database_id": "5b9a1731-d83a-41e7-84a6-60e5cf137079" }
+  ]
+}

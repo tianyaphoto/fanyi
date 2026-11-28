@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Carbon.HIToolbox
+import Translation
 
 /// 开发用：不调用翻译服务，把假的原文和译文塞进浮窗并截图，用来检查长文本的排版。
 ///
@@ -80,6 +81,23 @@ enum DemoMode {
                         try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent("settings.png"))
                     }
                 }
+                NSApp.terminate(nil)
+            }
+            return
+        }
+        // FANYI_DEMO_POLISH=1：截改写后的对比浮窗。original.txt / result.txt 是改写前后；tone.txt 可选（formal 等）；
+        // replace=0 文件存在时模拟「改写剪贴板」（没有撤回和语气按钮）。图片写到 polish.png，逐词对比写到 diff.txt。
+        if ProcessInfo.processInfo.environment["FANYI_DEMO_POLISH"] != nil {
+            let original = read("original.txt") ?? "", result = read("result.txt") ?? ""
+            let tone = read("tone.txt").flatMap(PolishRules.Tone.init) ?? .standard
+            let pieces = TextDiff.pieces(from: original, to: result) ?? []
+            let marked = pieces.map { $0.kind == .same ? $0.text : $0.kind == .removed ? "[-\($0.text)-]" : "{+\($0.text)+}" }.joined()
+            try? marked.write(to: dir.appendingPathComponent("diff.txt"), atomically: true, encoding: .utf8)
+            PolishPanelController.shared.show(PolishOutcome(original: original, result: result, tone: tone,
+                                                            canReplace: read("replace") != "0"), anchor: nil, seconds: 30)
+            Task {
+                try? await Task.sleep(for: .milliseconds(1000))
+                PolishPanelController.shared.snapshot(to: dir.appendingPathComponent("polish.png"))
                 NSApp.terminate(nil)
             }
             return
@@ -164,6 +182,20 @@ enum PolishSelfTest {
             }
             try? await Task.sleep(for: .milliseconds(200))
             for _ in 0..<600 where polish.isRunning { try? await Task.sleep(for: .milliseconds(100)) }
+            // FANYI_SELFTEST_STEPS=again,concise,revert：改写完接着做几步，每步后打印输入框内容。
+            // again = 再按一次改写快捷键（浮窗还在时应该是换下一种语气）；formal / concise / casual = 点浮窗上的语气；revert = 撤回
+            for step in (env["FANYI_SELFTEST_STEPS"] ?? "").split(separator: ",").map(String.init) {
+                try? await Task.sleep(for: .milliseconds(600))
+                switch step {
+                case "again": polish.polishField()
+                case "revert": polish.revert()
+                default: if let tone = PolishRules.Tone(rawValue: step) { polish.retone(tone) }
+                }
+                try? await Task.sleep(for: .milliseconds(200))
+                for _ in 0..<600 where polish.isRunning { try? await Task.sleep(for: .milliseconds(100)) }
+                try? await Task.sleep(for: .milliseconds(300))
+                print("步骤 \(step) 之后：\(FocusTarget.current()?.value() ?? "（读不到）")")
+            }
             for entry in DiagnosticsLog.shared.entries { print("  \(entry.message)") }
             if let now = FocusTarget.current() {
                 var title: CFTypeRef?
@@ -328,5 +360,172 @@ enum ClipboardSelfTest {
             print("输入框之后：\(after ?? "（读不到）")")
             exit(after?.contains("beta 第二条") == true ? 0 : 1)
         }
+    }
+}
+
+
+/// 开发用：不需要屏幕操作的功能自测。
+///
+///     FANYI_SELFTEST=<名字> [FANYI_DATA_DIR=<临时目录>] build/Build/Products/Release/Fanyi.app/Contents/MacOS/Fanyi
+///
+/// - `anki`：把 3 条假生词发到 FANYI_ANKI_URL（假的 AnkiConnect，见 tests/anki-mock.py），打印结果和导出文件的内容。
+/// - `system`：用系统翻译翻 FANYI_SELFTEST_TEXT（多条用 `||` 隔开），打印译文。FANYI_SELFTEST_TO=ja 指定目标语言。
+/// - `ocr`：识别 FANYI_SELFTEST_IMAGE 里的文字并放进剪贴板（会改剪贴板），打印提示和剪贴板内容。
+/// - `review`：在 FANYI_DATA_DIR 的假生词本上跑一遍复习规则（必须给 FANYI_DATA_DIR，不碰真实数据）。
+/// - `reviewshot`：用 FANYI_DATA_DIR 里的生词本和历史截一张复习窗口，写到该目录的 review.png（step=reveal 文件存在时先翻开）。
+@MainActor
+enum SelfTest {
+    static var name: String? { ProcessInfo.processInfo.environment["FANYI_SELFTEST"] }
+
+    /// 生词本、历史的目录。自测时可以用 FANYI_DATA_DIR 指到临时目录。
+    nonisolated static var dataDirectory: URL {
+        let dir: URL
+        if let custom = ProcessInfo.processInfo.environment["FANYI_DATA_DIR"], ProcessInfo.processInfo.environment["FANYI_SELFTEST"] != nil {
+            dir = URL(fileURLWithPath: custom, isDirectory: true)
+        } else {
+            dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Fanyi", isDirectory: true)
+        }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    static func run(_ name: String) {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        let env = ProcessInfo.processInfo.environment
+        Task {
+            var ok = true
+            switch name {
+            case "anki":
+                let entries = [
+                    VocabEntry(text: "redundant", translation: "adj. 多余的\n\(Translator.memoryMarker)\n拆开记：re + und",
+                               context: "The second check is <redundant> & slow.", origin: "预览：paper.pdf"),
+                    VocabEntry(text: "mitigate", translation: "v. 减轻"),
+                    VocabEntry(text: "tab\there", translation: "带制表符", context: "line1\nline2"),
+                ]
+                print("可用：\(await AnkiExport.isAvailable())")
+                do {
+                    let summary = try await AnkiExport.send(entries)
+                    print("新增 \(summary.added)，重复 \(summary.duplicates)")
+                } catch {
+                    print("失败：\(error.localizedDescription)")
+                    ok = false
+                }
+                print("--- 导出文件内容\n" + AnkiExport.fileContents(entries))
+            case "system":
+                let target = env["FANYI_SELFTEST_TO"].flatMap(Language.find)
+                for text in (env["FANYI_SELFTEST_TEXT"] ?? "").components(separatedBy: "||") {
+                    let start = Date()
+                    do {
+                        let output = try await SystemTranslator.translate(text, plan: TranslationPlan(text, target: target))
+                        print(String(format: "✓ [%.2fs] %@ → %@", Date().timeIntervalSince(start),
+                                     text.replacingOccurrences(of: "\n", with: " ⏎ "), output.replacingOccurrences(of: "\n", with: " ⏎ ")))
+                    } catch {
+                        print("✗ \(text) → \(error.localizedDescription)")
+                        ok = false
+                    }
+                }
+            case "langpack":
+                // 打开语言包下载窗口（会弹系统的确认框），截屏写到 FANYI_DATA_DIR/langpack.png；下好后打印结果
+                let pair = (env["FANYI_SELFTEST_PAIR"] ?? "en,zh-Hans").split(separator: ",").map { Locale.Language(identifier: String($0)) }
+                var done = false
+                Windows.showLanguagePackDownload(LanguagePackMissing(source: pair[0], target: pair[1], sourceName: "英语", targetName: "简体中文")) { done = true }
+                let wait = Int(env["FANYI_SELFTEST_WAIT"] ?? "8") ?? 8
+                for _ in 0..<(wait * 2) where !done { try? await Task.sleep(for: .milliseconds(500)) }
+                print("下载完成：\(done)")
+                if #available(macOS 15.0, *) {
+                    print("状态：\(await LanguageAvailability().status(from: pair[0], to: pair[1]))")
+                }
+                ok = done
+            case "ocr":
+                let url = URL(fileURLWithPath: env["FANYI_SELFTEST_IMAGE"] ?? "")
+                let shot = Coordinator.readScreenshot(at: url, withImage: false)
+                print("提示：" + Coordinator.copyRecognized(shot?.text ?? ""))
+                print("剪贴板：" + (NSPasteboard.general.string(forType: .string) ?? ""))
+                try? await Task.sleep(for: .milliseconds(300))
+            case "review":
+                ok = reviewRules()
+            case "reviewshot":
+                Windows.showReview()
+                try? await Task.sleep(for: .milliseconds(900))
+                if let window = NSApp.windows.first(where: { $0.title == "今日复习与统计" }), let view = window.contentView {
+                    if FileManager.default.fileExists(atPath: dataDirectory.appendingPathComponent("step=reveal").path) {
+                        // 回车 = 「翻开看释义」
+                        if let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                        windowNumber: window.windowNumber, context: nil, characters: "\r",
+                                                        charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: UInt16(kVK_Return)) {
+                            window.sendEvent(event)
+                        }
+                        try? await Task.sleep(for: .milliseconds(700))
+                    }
+                    if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                        view.cacheDisplay(in: view.bounds, to: rep)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: dataDirectory.appendingPathComponent("review.png"))
+                    }
+                }
+            default:
+                print("没有这个自测：\(name)")
+                ok = false
+            }
+            exit(ok ? 0 : 1)
+        }
+    }
+
+    /// 复习规则：每天上限、记得后的间隔、忘了重来、走完全部间隔算掌握。
+    private static func reviewRules() -> Bool {
+        guard ProcessInfo.processInfo.environment["FANYI_DATA_DIR"] != nil else {
+            print("必须给 FANYI_DATA_DIR，免得改到真实的生词本")
+            return false
+        }
+        // 复习次数记在偏好设置里：测完恢复原值
+        let defaults = UserDefaults.standard
+        let savedDay = defaults.object(forKey: "review.day"), savedDone = defaults.object(forKey: "review.doneToday")
+        defaults.removeObject(forKey: "review.day"); defaults.removeObject(forKey: "review.doneToday")
+        defer {
+            if let savedDay { defaults.set(savedDay, forKey: "review.day") } else { defaults.removeObject(forKey: "review.day") }
+            if let savedDone { defaults.set(savedDone, forKey: "review.doneToday") } else { defaults.removeObject(forKey: "review.doneToday") }
+        }
+        let store = VocabularyStore.shared
+        var failures = 0
+        func expect(_ condition: Bool, _ what: String) {
+            print("\(condition ? "✓" : "✗") \(what)")
+            if !condition { failures += 1 }
+        }
+        let now = Date()
+        for index in 0..<8 { store.save(text: "old\(index)", translation: "旧词 \(index)") }
+        store.save(text: "fresh", translation: "今天刚收藏")
+        // 前 8 个改成几天前收藏的（越靠前越早），最后一个是今天的
+        for (offset, entry) in store.entries.filter({ $0.text.hasPrefix("old") }).enumerated() {
+            var changed = entry
+            changed.createdAt = now.addingTimeInterval(-Double(10 + offset) * 86400)
+            store.update(changed)
+        }
+        expect(store.dueEntries().count == 8, "到期 8 个（今天刚收藏的不算）：实际 \(store.dueEntries().count)")
+        expect(store.todayQueue().count == 5, "今天只给 5 个：实际 \(store.todayQueue().count)")
+        let first = store.todayQueue()[0]
+        store.review(id: first.id, remembered: true, now: now)
+        var after = store.entries.first { $0.id == first.id }!
+        expect(after.reviewStage == 1 && abs(after.nextReview!.timeIntervalSince(now) - 3 * 86400) < 1, "记得一次：3 天后再出现")
+        expect(store.todayQueue().count == 4 && store.reviewedToday == 1, "复习 1 个后今天还剩 4 个")
+        let second = store.todayQueue()[0]
+        store.review(id: second.id, remembered: false, now: now)
+        after = store.entries.first { $0.id == second.id }!
+        expect(after.reviewStage == 0 && abs(after.nextReview!.timeIntervalSince(now) - 86400) < 1, "忘了：明天再出现")
+        // 同一个词一路记得到底
+        var later = now
+        for _ in 0..<4 {
+            later = store.entries.first { $0.id == first.id }!.nextReview!.addingTimeInterval(60)
+            store.review(id: first.id, remembered: true, now: later)
+        }
+        after = store.entries.first { $0.id == first.id }!
+        expect(after.mastered && after.reviewStage == 5, "连续记得 5 次：标记为已掌握（实际第 \(after.reviewStage ?? -1) 次，掌握 \(after.mastered)）")
+        expect(!store.dueEntries(now: later.addingTimeInterval(365 * 86400)).contains { $0.id == first.id }, "已掌握的不再出现")
+        expect(store.todayQueue().isEmpty, "今天复习满 5 次后不再给：实际还给 \(store.todayQueue().count) 个")
+        // 旧版本的生词本文件（没有复习字段）能读
+        let legacy = #"[{"id":"7C9E6679-7425-40DE-944B-E07FC1F90AE7","text":"legacy","translation":"旧数据","createdAt":700000000,"mastered":false}]"#
+        let decoded = try? JSONDecoder().decode([VocabEntry].self, from: Data(legacy.utf8))
+        expect(decoded?.first?.text == "legacy" && decoded?.first?.reviewStage == nil, "旧版生词本文件能读")
+        print(failures == 0 ? "全部通过" : "失败 \(failures) 项")
+        return failures == 0
     }
 }

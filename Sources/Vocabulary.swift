@@ -10,6 +10,9 @@ struct VocabEntry: Codable, Identifiable, Hashable {
     var context: String?
     /// 来源 App / 文档，例如「预览：paper.pdf」
     var origin: String?
+    /// 复习进度：已经连续记得几次、下次什么时候复习（旧数据没有这两项，所以是可选的）
+    var reviewStage: Int?
+    var nextReview: Date?
 }
 
 /// 生词本：保存在 ~/Library/Application Support/Fanyi/vocabulary.json
@@ -21,9 +24,7 @@ final class VocabularyStore {
     private(set) var entries: [VocabEntry] = []
 
     @ObservationIgnored private let fileURL: URL = {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Fanyi", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dir = SelfTest.dataDirectory
         return dir.appendingPathComponent("vocabulary.json")
     }()
 
@@ -85,6 +86,13 @@ final class VocabularyStore {
         persist()
     }
 
+    /// 整条替换（复习时更新进度用）。
+    func update(_ entry: VocabEntry) {
+        guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
+        entries[index] = entry
+        persist()
+    }
+
     func toggleMastered(id: VocabEntry.ID) {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[index].mastered.toggle()
@@ -109,7 +117,32 @@ struct VocabularyView: View {
     @State private var editingContext = false
     @State private var contextDraft = ""
     @State private var removed: (entry: VocabEntry, index: Int)?
+    @State private var exporting = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 发到 Anki：Anki 没开或没装插件时，改为导出文件。
+    private func sendToAnki(_ entries: [VocabEntry]) {
+        exporting = true
+        Task {
+            defer { exporting = false }
+            guard await AnkiExport.isAvailable() else {
+                let alert = NSAlert()
+                alert.messageText = "没有连上 Anki"
+                alert.informativeText = "直接制卡需要 Anki 开着，并装了 AnkiConnect 插件（Anki → 工具 → 插件 → 获取插件，代码 2055492159，装完重启 Anki）。\n\n也可以先导出成文件，再在 Anki 里用「文件 → 导入」。"
+                alert.addButton(withTitle: "导出成文件…")
+                alert.addButton(withTitle: "取消")
+                if alert.runModal() == .alertFirstButtonReturn { AnkiExport.saveFile(entries) }
+                return
+            }
+            do {
+                let summary = try await AnkiExport.send(entries)
+                let skipped = summary.duplicates > 0 ? "，\(summary.duplicates) 条 Anki 里已经有了" : ""
+                Toast.shared.show("已发到 Anki 的「\(AnkiExport.deckName)」牌组：新增 \(summary.added) 条\(skipped)", seconds: 5)
+            } catch {
+                Toast.shared.show("发到 Anki 失败：\(error.localizedDescription)", style: .error, seconds: 6)
+            }
+        }
+    }
 
     private var filtered: [VocabEntry] {
         store.entries.filter { entry in
@@ -172,12 +205,26 @@ struct VocabularyView: View {
                         if !Task.isCancelled { withAnimation(Theme.quick) { self.removed = nil } }
                     }
                 } else {
-                    Text("共 \(store.entries.count) 条，已掌握 \(store.entries.filter(\.mastered).count) 条")
+                    HStack(spacing: Theme.gapS) {
+                        Text("共 \(store.entries.count) 条，已掌握 \(store.entries.filter(\.mastered).count) 条")
+                            .font(Theme.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                        if exporting { ProgressView().controlSize(.small) }
+                        Menu("导出") {
+                            Button("发到 Anki（当前列表的 \(filtered.count) 条）") { sendToAnki(filtered) }
+                            Button("导出成文件…") { AnkiExport.saveFile(filtered) }
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
                         .font(Theme.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .padding(6)
-                        .transition(.opacity)
+                        .disabled(filtered.isEmpty || exporting)
+                        .help("把当前列表里的生词做成 Anki 卡片：正面是原句和生词，背面是释义")
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .transition(.opacity)
                 }
             }
             .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)

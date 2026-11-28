@@ -21,6 +21,33 @@ enum PolishRules {
         var title: String { self == .british ? "英式（finalised、colour）" : "美式（finalized、color）" }
     }
 
+    /// 语气：改写后可以在浮窗上换，或再按一次快捷键轮换。
+    enum Tone: String, CaseIterable, Identifiable {
+        case standard, formal, concise, casual
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .standard: return "标准"
+            case .formal: return "更正式"
+            case .concise: return "更简短"
+            case .casual: return "更口语"
+            }
+        }
+        var next: Tone {
+            let all = Tone.allCases
+            return all[(all.firstIndex(of: self)! + 1) % all.count]
+        }
+        /// 写进提示词的语气要求；标准语气不加。
+        var instruction: String? {
+            switch self {
+            case .standard: return nil
+            case .formal: return "这一次用更正式、更礼貌的书面语气（适合发给客户、上级或不熟的同事）：用完整句子，不用缩写和口头语。意思和信息量不变。"
+            case .concise: return "这一次尽量简短：去掉客套话、重复和可有可无的修饰，能用一句说清就不用两句。关键信息（时间、数字、请求）一个都不能丢。"
+            case .casual: return "这一次用更口语、更随意的语气（像和熟悉的同事聊天）：可以用缩写（I'm、let's、can't），句子短一点，但不用俚语和表情。意思和信息量不变。"
+            }
+        }
+    }
+
     static var spelling: Spelling { Spelling(rawValue: UserDefaults.standard.string(forKey: spellingKey) ?? "") ?? .british }
     static var translateInstructions: String { UserDefaults.standard.string(forKey: translateInstructionsKey) ?? "" }
     static var polishInstructions: String { UserDefaults.standard.string(forKey: polishInstructionsKey) ?? "" }
@@ -84,7 +111,7 @@ struct TextShield {
 // MARK: - 提示词与处理
 
 enum PolishService {
-    static func systemPrompt() -> String {
+    static func systemPrompt(tone: PolishRules.Tone = .standard) -> String {
         let spelling = PolishRules.spelling == .british
             ? "使用英式拼写（finalised、organised、colour、centre），不要用美式拼写。"
             : "使用美式拼写（finalized、organized、color、center），不要用英式拼写。"
@@ -103,6 +130,9 @@ enum PolishService {
         let polish = PolishRules.polishInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
         if !translate.isEmpty { prompt += "\n\n用户对「中文译成英文」的额外要求（不能违反上面的规则 4–6）：\n\(translate)" }
         if !polish.isEmpty { prompt += "\n\n用户对「英文纠错润色」的额外要求（不能违反上面的规则 4–6）：\n\(polish)" }
+        if let instruction = tone.instruction {
+            prompt += "\n\n语气要求（优先于规则 2 里“不改变语气的正式程度”和上面用户的额外要求，但不能违反规则 3–6）：\n\(instruction)"
+        }
         return prompt
     }
 
@@ -125,13 +155,14 @@ enum PolishService {
 
     /// 改写一段文字。失败时抛错，调用方保留原文不动。
     @MainActor
-    static func process(_ text: String) async throws -> String {
+    static func process(_ text: String, tone: PolishRules.Tone = .standard) async throws -> String {
         let shield = TextShield(text)
         let request = Translator.Request(
-            system: systemPrompt(),
+            system: systemPrompt(tone: tone),
             text: "<text>\n\(TranslationCheck.neutralizeTags(shield.masked))\n</text>",
             image: nil,
-            examples: examples())
+            // 示范对话是标准语气；换语气时不放，免得把输出拉回去
+            examples: tone == .standard ? examples() : [])
         let raw = try await Translator.complete(request, timeout: PolishRules.timeout)
         try Task.checkCancellation()
         let cleaned = TranslationCheck.clean(raw, source: shield.masked).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -323,7 +354,127 @@ final class PolishCoordinator {
 
     private enum Mode { case field, clipboard }
 
-    func polishField() { start(.field) }
+    /// 最近一次「改写当前输入框」：浮窗还在时可以撤回、换语气。
+    private struct Session {
+        var target: FocusTarget
+        var readable: Bool
+        var original: String
+        var result: String
+        var tone: PolishRules.Tone
+    }
+    private var session: Session?
+    /// 有可以撤回的改写（菜单「撤回上次改写」用）
+    var canRevert: Bool { session != nil }
+    @ObservationIgnored private var panel: PolishPanelController { .shared }
+
+    /// 浮窗还开着、输入目标没变时，再按一次快捷键是「换下一种语气」，不是把改写结果再改写一遍。
+    func polishField() {
+        if let session, panel.isVisible, !isRunning, let now = FocusTarget.current(), now.isSame(as: session.target) {
+            retone(session.tone.next)
+        } else {
+            start(.field)
+        }
+    }
+
+    /// 用另一种语气重新改写原文，替换输入框里上一次的结果。
+    func retone(_ tone: PolishRules.Tone) {
+        guard let session, !isRunning else { return }
+        log.add("换语气：\(tone.title)")
+        isRunning = true
+        panel.setBusy(true)
+        task = Task { [weak self] in
+            guard let self else { return }
+            await self.runRetone(session, tone)
+            self.watcher.stop()
+            self.isRunning = false
+            self.task = nil
+            self.panel.setBusy(false)
+        }
+    }
+
+    /// 把输入框恢复成改写前的原文。
+    func revert() {
+        guard let session, !isRunning else { return }
+        log.add("撤回改写")
+        isRunning = true
+        task = Task { [weak self] in
+            guard let self else { return }
+            if await self.replaceAll(in: session, with: session.original, what: "撤回") {
+                self.session = nil
+                self.panel.hide()
+                Toast.shared.show("已恢复原文", seconds: 2)
+            }
+            self.watcher.stop()
+            self.isRunning = false
+            self.task = nil
+        }
+    }
+
+    private func runRetone(_ session: Session, _ tone: PolishRules.Tone) async {
+        let started = Date()
+        let result: String
+        do {
+            result = try await PolishService.process(session.original, tone: tone)
+        } catch {
+            if Task.isCancelled { log.add("已取消", .warning); return }
+            fail("换语气失败：\(error.localizedDescription)。输入框没有改动")
+            return
+        }
+        if Task.isCancelled { log.add("已取消", .warning); return }
+        log.add(String(format: "模型返回，耗时 %.1f 秒，%d 字", Date().timeIntervalSince(started), result.count))
+        guard await replaceAll(in: session, with: result, what: "换语气") else { return }
+        lastResult = result
+        var updated = session
+        updated.result = result
+        updated.tone = tone
+        self.session = updated
+        panel.show(PolishOutcome(original: session.original, result: result, tone: tone, canReplace: true),
+                   anchor: session.target.frame())
+    }
+
+    /// 把输入框里上一次的改写结果整体换成另一段文字（撤回、换语气共用）：
+    /// 确认输入目标没变、内容还是上次的结果 → ⌘A → ⌘V → 回读确认。不满足时不动输入框，文字留在剪贴板。
+    private func replaceAll(in session: Session, with text: String, what: String) async -> Bool {
+        let pasteboard = NSPasteboard.general
+        guard await KeySynth.waitForRelease(timeout: 3) else {
+            fail("\(what)：一直有按键按着，已停止")
+            return false
+        }
+        guard let now = FocusTarget.current(), now.isSame(as: session.target) else {
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            fail("\(what)：输入目标变了，没有自动替换。文字已在剪贴板里，可以手动粘贴", level: .warning)
+            return false
+        }
+        if session.readable {
+            guard let value = session.target.value(), sameText(value, session.result) else {
+                pasteboard.clearContents()
+                pasteboard.setString(text, forType: .string)
+                fail("\(what)：输入框里的内容已经不是上次的改写结果，没有自动替换。文字已在剪贴板里，可以手动粘贴", level: .warning)
+                return false
+            }
+        }
+        KeySynth.press(kVK_ANSI_A)
+        if session.readable {
+            guard await waitForFullSelection(session.target) else {
+                fail("\(what)：全选没有完成，已停止，输入框没有改动")
+                return false
+            }
+        } else {
+            try? await Task.sleep(for: .milliseconds(150))
+        }
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        KeySynth.press(kVK_ANSI_V)
+        log.add("\(what)：已发送 ⌘A、⌘V")
+        guard session.readable else { return true }
+        if await waitForValue(session.target, equals: text, timeout: 2) {
+            log.add("\(what)：已验证")
+            return true
+        }
+        fail("\(what)：结果未确认，请看一眼输入框", level: .warning)
+        return false
+    }
     func polishClipboard() { start(.clipboard) }
 
     func cancel() {
@@ -362,6 +513,8 @@ final class PolishCoordinator {
             return
         }
         isRunning = true
+        session = nil
+        panel.hide()
         task = Task { [weak self] in
             guard let self else { return }
             await self.run(mode, target)
@@ -468,6 +621,10 @@ final class PolishCoordinator {
 
         if mode == .clipboard {
             await pasteIntoCurrentField(result)
+            if PolishPanelController.enabled {
+                panel.show(PolishOutcome(original: original, result: result, tone: .standard, canReplace: false),
+                           anchor: FocusTarget.current()?.frame())
+            }
             return
         }
 
@@ -489,10 +646,19 @@ final class PolishCoordinator {
         KeySynth.press(kVK_ANSI_V)
         log.add("已发送 ⌘V")
 
+        // 记下这次改写，浮窗显示改了哪里，可以撤回、换语气
+        session = Session(target: target, readable: readable, original: original, result: result, tone: .standard)
+        if PolishPanelController.enabled {
+            panel.show(PolishOutcome(original: original, result: result, tone: .standard, canReplace: true),
+                       anchor: target.frame())
+        }
+
         // 回读确认
         guard readable, let before = fieldAtCopy, let selection = selectionAtCopy else {
             log.add("目标读不到文字，无法回读确认", .warning)
-            Toast.shared.show("已粘贴，但这个应用读不到文字，无法确认结果；请看一眼输入框", style: .warning)
+            if !PolishPanelController.enabled {
+                Toast.shared.show("已粘贴，但这个应用读不到文字，无法确认结果；请看一眼输入框", style: .warning)
+            }
             return
         }
         let expected: String

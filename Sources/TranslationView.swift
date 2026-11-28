@@ -42,6 +42,18 @@ final class TranslationModel {
     /// 两次都没通过检查时的问题说明
     var qualityWarning: String?
 
+    /// 这次用的是系统翻译（只有译文，没有语境释义等）
+    var usedSystemTranslation = false
+
+    /// 系统翻译缺语言包：出错提示里给「下载语言包」按钮
+    var missingLanguagePack: LanguagePackMissing?
+
+    /// 下载语言包，下完自动重翻。
+    func downloadLanguagePack() {
+        guard let missingLanguagePack else { return }
+        Windows.showLanguagePackDownload(missingLanguagePack) { [weak self] in self?.retry() }
+    }
+
     /// 输入翻译模式：浮窗顶部显示输入框。
     var inputMode = false
     var inputText = ""
@@ -108,7 +120,9 @@ final class TranslationModel {
         origin = capture.origin
         sourceInfo = capture.source
         scene = sceneID.map { SceneStore.shared.scene(id: $0) } ?? SceneStore.shared.detect(for: capture.source)
-        retrieval = text.isEmpty ? .empty : KnowledgeStore.shared.retrieve(text: text, context: capture.context, sceneID: scene.id)
+        let system = !Settings.provider.isLLM
+        usedSystemTranslation = system
+        retrieval = text.isEmpty || system ? .empty : KnowledgeStore.shared.retrieve(text: text, context: capture.context, sceneID: scene.id)
         targetLanguage = text.isEmpty && targetOverride == nil
             ? nil : TranslationPlan(text, target: targetOverride).target
         attempt = 1
@@ -116,6 +130,7 @@ final class TranslationModel {
         result = ""
         errorMessage = nil
         needsAPIKey = false
+        missingLanguagePack = nil
         // 看图翻译而本地又没识别出文字时，没有可以查词典、记历史的原文
         isFavorited = !text.isEmpty && VocabularyStore.shared.contains(text)
         localDefinition = text.isEmpty ? nil : LocalDictionary.lookup(text)
@@ -123,10 +138,31 @@ final class TranslationModel {
         if !isRetry {
             lookupCount = text.isEmpty ? 0 : HistoryStore.shared.record(text, context: context, origin: origin)
             firstSeen = lookupCount >= 2 ? HistoryStore.shared.firstSeen(text) : nil
-            wantsMemory = !text.isEmpty && Settings.wantsMemoryAid(lookupCount: lookupCount)
+            wantsMemory = !text.isEmpty && !system && Settings.wantsMemoryAid(lookupCount: lookupCount)
+            ReviewReminder.nudgeIfNeeded()
         }
 
         isLoading = true
+        if system {
+            task = Task {
+                do {
+                    guard !text.isEmpty else { throw TranslateError(message: "截图中没有识别到文字。") }
+                    let output = try await SystemTranslator.translate(text, plan: TranslationPlan(text, target: targetOverride))
+                    if Task.isCancelled { return }
+                    result = output
+                    HistoryStore.shared.updateTranslation(text, translation: localDefinition.map { output + "\n" + $0 } ?? output)
+                    if isFavorited { saveToVocabulary() }
+                } catch {
+                    if Task.isCancelled || error is CancellationError { return }
+                    missingLanguagePack = error as? LanguagePackMissing
+                    errorMessage = error.localizedDescription
+                    needsAPIKey = (error as? TranslateError)?.needsSetup ?? false
+                    if let local = localDefinition { HistoryStore.shared.updateTranslation(text, translation: local) }
+                }
+                isLoading = false
+            }
+            return
+        }
         task = Task {
             do {
                 let outcome = try await Translator.translate(
@@ -193,6 +229,8 @@ final class TranslationModel {
         lookupCount = 0
         wantsMemory = false
         firstSeen = nil
+        usedSystemTranslation = false
+        missingLanguagePack = nil
     }
 
     func cancel() {
@@ -219,8 +257,10 @@ final class TranslationModel {
     }
 
     private func saveToVocabulary() {
+        // 系统翻译只有一个词的译法，连同系统词典的释义一起存
+        let systemEntry = usedSystemTranslation && !result.isEmpty ? localDefinition.map { result + "\n\n" + $0 } : nil
         VocabularyStore.shared.save(text: source,
-                                    translation: result.isEmpty ? (localDefinition ?? "") : result,
+                                    translation: systemEntry ?? (result.isEmpty ? (localDefinition ?? "") : result),
                                     context: context, origin: origin)
     }
 
@@ -334,6 +374,7 @@ struct TranslationView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(.regularMaterial)
+        .modifier(SystemTranslationHost())
         .onChange(of: model.source) {
             showFullLocal = false
             showFullSource = false
@@ -688,7 +729,7 @@ struct TranslationView: View {
         if !model.result.isEmpty || model.isLoading {
             VStack(alignment: .leading, spacing: 6) {
                 if model.localDefinition != nil {
-                    SectionLabel("AI 释义")
+                    SectionLabel(model.usedSystemTranslation ? "系统翻译" : "AI 释义")
                 }
                 if model.attempt > 1 && model.isLoading {
                     Label("第一次的输出不像译文，正在重新翻译…", systemImage: "arrow.triangle.2.circlepath")
@@ -704,6 +745,16 @@ struct TranslationView: View {
                             .buttonStyle(.link)
                     }
                     .font(Theme.caption)
+                }
+                if model.usedSystemTranslation, !model.result.isEmpty, !model.isLoading {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("系统翻译，在本机完成。想要语境释义、帮你记住和一键改写，可以配置大模型服务。")
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("去设置") { Windows.showSettings() }
+                            .buttonStyle(.link)
+                    }
+                    .font(Theme.caption)
+                    .foregroundStyle(.secondary)
                 }
                 if canShowBilingual {
                     bilingualList
@@ -783,6 +834,14 @@ struct TranslationView: View {
             .font(Theme.body)
             if model.canRetry {
                 HStack(spacing: Theme.gapS) {
+                    if model.missingLanguagePack != nil {
+                        Button("下载语言包") { model.downloadLanguagePack() }
+                            .keyboardShortcut(.defaultAction)
+                        Button("换成大模型服务…") {
+                            onClose()
+                            Windows.showSettings()
+                        }
+                    }
                     Button("重试") { model.retry() }
                     if model.needsAPIKey {
                         Button("打开设置") {

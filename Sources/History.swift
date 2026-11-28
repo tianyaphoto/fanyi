@@ -24,9 +24,7 @@ final class HistoryStore {
     @ObservationIgnored private let limit = 2000
 
     @ObservationIgnored private let fileURL: URL = {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Fanyi", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dir = SelfTest.dataDirectory
         return dir.appendingPathComponent("history.json")
     }()
 
